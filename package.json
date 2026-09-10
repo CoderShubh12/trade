@@ -1,0 +1,18 @@
+{
+  "name": "nse-bias-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "axios": "^1.7.2",
+    "next": "14.2.4",
+    "otplib": "^12.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

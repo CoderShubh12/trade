@@ -1,0 +1,5 @@
+# Local env files
+.env*.local
+.env
+.next
+node_modules
