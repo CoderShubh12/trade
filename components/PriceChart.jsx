@@ -30,11 +30,12 @@ function buildPath(points, chartW, chartH, minY, maxY) {
 export default function PriceChart({ data = [], ind = {}, score = 0 }) {
   const chart = useMemo(() => {
     const w = 920;
-    const h = 320;
+    const h = 340;
     const pad = 14;
+    const rightMargin = 55; // Price label space on the right
     const volHeight = 55;
     const priceH = h - pad * 2 - volHeight;
-    const innerW = w - pad * 2;
+    const innerW = w - pad * 2 - rightMargin;
 
     if (!data || data.length === 0) {
       return {
@@ -42,6 +43,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
         h,
         pad,
         innerW,
+        rightMargin,
         priceH,
         candles: [],
         volBars: [],
@@ -70,6 +72,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
         h,
         pad,
         innerW,
+        rightMargin,
         priceH,
         candles: [],
         volBars: [],
@@ -98,7 +101,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
       volSma.push(avg);
     }
 
-    // Candlesticks (Crisp lines and solid colors)
+    // Candlesticks mapping
     const candles = viewBars.map((d, i) => {
       const x = i * xStep;
       const yHigh = priceH - ((d.high - minY) / (maxY - minY)) * priceH;
@@ -109,6 +112,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
 
       return {
         x,
+        rawClose: d.close,
         yHigh: isNaN(yHigh) ? 0 : yHigh,
         yLow: isNaN(yLow) ? 0 : yLow,
         yClose: isNaN(yClose) ? 0 : yClose,
@@ -118,7 +122,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
       };
     });
 
-    // Volume Bars
+    // Volume Bars mapping
     const volBars = viewBars.map((d, i) => {
       const x = i * xStep;
       const barH = ((d.volume || 1) / maxVol) * (volHeight - 12);
@@ -141,7 +145,6 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
       };
     });
 
-    // Volume 20-SMA Path
     const volSmaPath = buildPath(volSma, innerW, volHeight - 12, 0, maxVol);
 
     // CPR Levels
@@ -174,6 +177,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
       h,
       pad,
       innerW,
+      rightMargin,
       priceH,
       volHeight,
       candleWidth,
@@ -194,7 +198,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
     return (
       <div
         style={{
-          height: "320px",
+          height: "340px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -207,7 +211,6 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
     );
   }
 
-  // Trigger Zone Logic (Outer Border Only)
   const isBuyZone = score >= 65;
   const isSellZone = score <= -65;
   const activeZoneColor = isBuyZone ? "#2FD98A" : isSellZone ? "#FF5D5D" : null;
@@ -216,14 +219,13 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
     <div
       style={{
         width: "100%",
-        height: "320px",
+        height: "340px",
         position: "relative",
         borderRadius: "8px",
         background: "#080c14",
         border: activeZoneColor
           ? `2px solid ${activeZoneColor}`
           : "1px solid #1a2333",
-        // Only outer border glow - inside SVG stays completely untouched
         boxShadow: activeZoneColor
           ? `0 0 12px ${activeZoneColor}80, 0 0 24px ${activeZoneColor}30`
           : "none",
@@ -233,7 +235,6 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
         transition: "all 0.3s ease",
       }}
     >
-      {/* CSS Animation for Outer Border Pulse */}
       {activeZoneColor && (
         <style>{`
           @keyframes neonBorderPulse {
@@ -249,7 +250,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
         `}</style>
       )}
 
-      {/* Top Floating Badge */}
+      {/* Top Status Badge */}
       {activeZoneColor && (
         <div
           style={{
@@ -284,7 +285,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
         </div>
       )}
 
-      {/* Pure, Sharp SVG Chart - No Filters, No Distortion */}
+      {/* Main SVG Engine */}
       <svg
         viewBox={`0 0 ${chart.w} ${chart.h}`}
         width="100%"
@@ -408,7 +409,7 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
             />
           )}
 
-          {/* Candlesticks (High Visibility & Crisp Structure) */}
+          {/* Candlesticks */}
           {chart.candles?.map((c, i) => (
             <g key={`candle-${i}`}>
               <line
@@ -429,14 +430,64 @@ export default function PriceChart({ data = [], ind = {}, score = 0 }) {
             </g>
           ))}
 
-          {/* Spot LTP Marker Dot */}
+          {/* Live Price Horizontal Line, Marker Dot & LTP Price Tag */}
           {chart.lastCandle && (
-            <circle
-              cx={chart.lastCandle.x}
-              cy={chart.lastCandle.yClose}
-              r={3}
-              fill={chart.lastCandle.color}
-            />
+            <g>
+              {/* Horizontal Running Price Tracker Line */}
+              <line
+                x1={0}
+                y1={chart.lastCandle.yClose}
+                x2={chart.innerW}
+                y2={chart.lastCandle.yClose}
+                stroke={chart.lastCandle.color}
+                strokeWidth="1"
+                strokeDasharray="3,2"
+                opacity="0.7"
+              />
+
+              {/* Pulsing Dot on Current Candle */}
+              <circle
+                cx={chart.lastCandle.x}
+                cy={chart.lastCandle.yClose}
+                r={3}
+                fill={chart.lastCandle.color}
+              />
+              <circle
+                cx={chart.lastCandle.x}
+                cy={chart.lastCandle.yClose}
+                r={6.5}
+                fill="none"
+                stroke={chart.lastCandle.color}
+                strokeWidth="1"
+                opacity="0.45"
+              />
+
+              {/* Live LTP Tag on Right Margin */}
+              <g
+                transform={`translate(${chart.innerW + 6}, ${chart.lastCandle.yClose - 8})`}
+              >
+                <rect
+                  x={0}
+                  y={0}
+                  width={46}
+                  height={16}
+                  rx={3}
+                  fill={chart.lastCandle.color}
+                />
+                <text
+                  x={23}
+                  y={11}
+                  fill="#000000"
+                  fontSize="9"
+                  fontWeight="800"
+                  textAnchor="middle"
+                >
+                  {chart.lastCandle.rawClose
+                    ? Number(chart.lastCandle.rawClose).toFixed(2)
+                    : ""}
+                </text>
+              </g>
+            </g>
           )}
         </g>
       </svg>

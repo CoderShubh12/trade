@@ -1,31 +1,38 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { STOCK_POOL } from "@/lib/stockPool";
 
 export const MASTER_SYMBOLS = [
   {
+    symbol: "SBIN",
+    name: "STATE BANK OF INDIA",
+    token: "3045",
+    exchangeSegment: 1,
+  },
+  {
+    symbol: "TATASTEEL",
+    name: "TATA STEEL LTD",
+    token: "3499",
+    exchangeSegment: 1,
+  },
+  {
+    symbol: "ITC",
+    name: "ITC LTD",
+    token: "1660",
+    exchangeSegment: 1,
+  },
+  {
+    symbol: "BEL",
+    name: "BHARAT ELECTRONICS",
+    token: "383",
+    exchangeSegment: 1,
+  },
+  {
     symbol: "NIFTY 50",
     name: "NIFTY 50 INDEX",
-    token: "26000",
-    exchangeSegment: 1,
-  },
-  {
-    symbol: "BANK NIFTY",
-    name: "BANK NIFTY INDEX",
-    token: "26009",
-    exchangeSegment: 1,
-  },
-  {
-    symbol: "RELIANCE",
-    name: "RELIANCE-EQ",
-    token: "2885",
-    exchangeSegment: 1,
-  },
-  {
-    symbol: "HDFCBANK",
-    name: "HDFCBANK-EQ",
-    token: "1333",
-    exchangeSegment: 1,
+    token: "99926000",
+    exchangeSegment: 13,
   },
 ];
 
@@ -53,15 +60,43 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
           `/api/search-symbol?q=${encodeURIComponent(query)}`,
         );
         const json = await res.json();
-        if (json.success && json.results) {
+        if (json.success && json.results && json.results.length > 0) {
           setResults(json.results);
+        } else {
+          // Fallback: लोकल STOCK_POOL (₹50–₹1,000) से फ़िल्टर करें
+          const q = query.toLowerCase();
+          const localMatched = (STOCK_POOL || [])
+            .filter(
+              (s) =>
+                s.symbol.toLowerCase().includes(q) ||
+                String(s.token).includes(q),
+            )
+            .slice(0, 10)
+            .map((s) => ({
+              symbol: s.symbol,
+              name: s.symbol,
+              token: String(s.token),
+              exchangeSegment: s.segment || 1,
+            }));
+          setResults(localMatched);
         }
       } catch (e) {
-        console.error("Search fetch error:", e);
+        // नेटवर्क एरर पर लोकल पूल फॉलबैक
+        const q = query.toLowerCase();
+        const localMatched = (STOCK_POOL || [])
+          .filter((s) => s.symbol.toLowerCase().includes(q))
+          .slice(0, 10)
+          .map((s) => ({
+            symbol: s.symbol,
+            name: s.symbol,
+            token: String(s.token),
+            exchangeSegment: s.segment || 1,
+          }));
+        setResults(localMatched);
       } finally {
         setSearching(false);
       }
-    }, 250);
+    }, 200);
 
     return () => clearTimeout(debounceTimer.current);
   }, [query]);
@@ -77,14 +112,22 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
   }, []);
 
   return (
-    <div ref={dropdownRef} style={{ position: "relative", width: "230px" }}>
+    <div
+      ref={dropdownRef}
+      style={{
+        position: "relative",
+        flex: "1 1 180px",
+        maxWidth: "240px",
+        minWidth: "140px",
+      }}
+    >
       <div
         style={{ position: "relative", display: "flex", alignItems: "center" }}
       >
         <input
           type="text"
-          placeholder="Search any NSE stock..."
-          value={isOpen ? query : selectedSymbol}
+          placeholder="Search ₹50–₹1k NSE..."
+          value={isOpen ? query : selectedSymbol || ""}
           onFocus={() => {
             setQuery("");
             setIsOpen(true);
@@ -99,17 +142,17 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
             border: "1px solid #1f293d",
             borderRadius: "6px",
             color: "#fff",
-            padding: "7px 32px 7px 10px",
-            fontSize: "0.8rem",
+            padding: "6px 28px 6px 10px",
+            fontSize: "0.78rem",
             outline: "none",
           }}
         />
         <span
           style={{
             position: "absolute",
-            right: "10px",
+            right: "8px",
             color: "#555d6e",
-            fontSize: "0.8rem",
+            fontSize: "0.75rem",
             pointerEvents: "none",
           }}
         >
@@ -123,21 +166,26 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
             position: "absolute",
             top: "115%",
             left: 0,
-            width: "300px",
-            maxHeight: "280px",
+            width: "280px",
+            maxWidth: "90vw",
+            maxHeight: "260px",
             overflowY: "auto",
             background: "#0c1017",
             border: "1px solid #1f293d",
             borderRadius: "6px",
             zIndex: 1000,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
           }}
         >
           {results.length === 0 ? (
             <div
-              style={{ padding: "12px", color: "#717b90", fontSize: "0.78rem" }}
+              style={{
+                padding: "10px 12px",
+                color: "#717b90",
+                fontSize: "0.75rem",
+              }}
             >
-              No NSE stocks found for "{query}"
+              No stocks found for "{query}"
             </div>
           ) : (
             results.map((item) => (
@@ -148,7 +196,7 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
                   setIsOpen(false);
                 }}
                 style={{
-                  padding: "9px 12px",
+                  padding: "8px 12px",
                   cursor: "pointer",
                   borderBottom: "1px solid rgba(255,255,255,0.03)",
                   display: "flex",
@@ -166,26 +214,29 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
                   <div
                     style={{
                       color: "#5B8CFF",
-                      fontWeight: 600,
-                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
                     }}
                   >
                     {item.symbol}
                   </div>
-                  <div style={{ color: "#717b90", fontSize: "0.7rem" }}>
-                    Token: {item.token}
+                  <div style={{ color: "#717b90", fontSize: "0.68rem" }}>
+                    {item.name
+                      ? item.name.slice(0, 22)
+                      : `Token: ${item.token}`}
                   </div>
                 </div>
                 <span
                   style={{
-                    fontSize: "0.65rem",
+                    fontSize: "0.62rem",
                     color: "#2FD98A",
                     background: "rgba(47,217,138,0.1)",
                     padding: "2px 5px",
                     borderRadius: "3px",
+                    fontWeight: 600,
                   }}
                 >
-                  NSE EQ
+                  {item.exchangeSegment === 13 ? "INDEX" : "NSE EQ"}
                 </span>
               </div>
             ))
@@ -195,3 +246,6 @@ export default function StockSearch({ selectedSymbol, onSelectStock }) {
     </div>
   );
 }
+
+// 🔑 Named export to prevent any import binding errors in page.jsx
+export { StockSearch };
