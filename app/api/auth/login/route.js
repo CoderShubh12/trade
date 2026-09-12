@@ -1,10 +1,9 @@
 // app/api/auth/login/route.js
 import { NextResponse } from "next/server";
 
-// Hardcoded authorized users (आप चाहें तो इन्हें .env में भी रख सकते हैं)
 const USERS = {
   admin: { password: "adminPassword123", role: "ADMIN" },
-  tester: { password: "Aditya1802", role: "Rana1802" },
+  Aditya1802: { password: "Rana1802", role: "TESTER" }, // 👈 यहाँ पासवर्ड "Rana1802" और रोल "TESTER" कर दिया है
 };
 
 export async function POST(request) {
@@ -19,7 +18,6 @@ export async function POST(request) {
       );
     }
 
-    // Create response and set a secure session cookie
     const response = NextResponse.json({ success: true, role: user.role });
     response.cookies.set({
       name: "terminal_session",
@@ -27,7 +25,7 @@ export async function POST(request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days session
+      maxAge: 60 * 60 * 24 * 7,
     });
 
     return response;
