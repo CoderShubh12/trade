@@ -579,7 +579,7 @@ body {
 }
 
 /* =========================================================
-   💡 INSTITUTIONAL EDUCATIONAL HOVER TOOLTIPS
+   💡 INSTITUTIONAL SMART VIEWPORT-AWARE TOOLTIPS
    ========================================================= */
 .has-tooltip {
   position: relative;
@@ -589,9 +589,9 @@ body {
 .has-tooltip::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: 125%;
+  bottom: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%) translateY(4px);
+  transform: translateX(-50%);
   background: #090e1a;
   color: #cbd5e1;
   border: 1px solid #3b82f6;
@@ -601,27 +601,26 @@ body {
   line-height: 1.4;
   white-space: normal;
   width: max-content;
-  max-width: 240px;
+  max-width: 220px;
   text-align: left;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transition:
     opacity 0.2s ease,
-    transform 0.2s ease;
+    visibility 0.2s ease;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.75),
     0 0 10px rgba(59, 130, 246, 0.2);
   z-index: 99999;
   font-weight: 500;
-  letter-spacing: 0.01em;
 }
 
 /* छोटा डाउन-एरो */
 .has-tooltip::before {
   content: "";
   position: absolute;
-  bottom: 110%;
+  bottom: calc(100% + 3px);
   left: 50%;
   transform: translateX(-50%);
   border-width: 5px;
@@ -637,5 +636,29 @@ body {
 .has-tooltip:hover::before {
   opacity: 1;
   visibility: visible;
-  transform: translateX(-50%) translateY(0);
+}
+
+/* 📱 स्क्रीन के किनारों (Left/Right edges) पर ऑटो-अडजस्टमेंट */
+/* अगर कोई एलिमेंट बिल्कुल बाईं ओर है */
+.dash-header .has-tooltip:first-child::after,
+.grid-secondary .indicators-card .has-tooltip:first-child::after {
+  left: 0;
+  transform: none;
+}
+.dash-header .has-tooltip:first-child::before,
+.grid-secondary .indicators-card .has-tooltip:first-child::before {
+  left: 15px;
+  transform: none;
+}
+
+/* अगर कोई एलिमेंट बिल्कुल दाईं ओर है */
+.dash-header .actions-group .has-tooltip:last-child::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.dash-header .actions-group .has-tooltip:last-child::before {
+  left: auto;
+  right: 20px;
+  transform: none;
 }

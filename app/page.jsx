@@ -14,6 +14,7 @@ import ExecutionDeckComponent from "@/components/ExecutionDeck";
 import PriceBandScanner from "@/components/PriceBandScanner";
 import AccuracyTracker from "@/components/AccuracyTracker";
 import { STOCK_POOL } from "@/lib/stockPool";
+import AiAnalystPanel from "@/components/AiAnalystPanel";
 import {
   computeAll,
   calculateATR,
@@ -22,6 +23,17 @@ import {
 import { detectCandlePattern } from "@/lib/candlestickEngine";
 import { parseBinaryPacket } from "@/lib/angelStream";
 import { fmt, isMarketOpen, playAlertTone } from "@/lib/utils";
+import {
+  detectMarketRegime,
+  checkIndicatorConflicts,
+} from "@/lib/marketRegime";
+import { calculatePositionSize, checkDailyRiskLimits } from "@/lib/riskEngine";
+import {
+  checkMarketLiquidityAndGaps,
+  checkSignalCooldown,
+  checkKillSwitch,
+  toggleKillSwitch,
+} from "@/lib/advancedGuards";
 
 // Chartink-Style Screener Preset Definitions
 const CHARTINK_STRATEGIES = [
@@ -169,6 +181,7 @@ export default function DashboardPage() {
   const [data, setData] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [killSwitchActive, setKillSwitchActive] = useState(false);
 
   const [niftyData, setNiftyData] = useState({
     ltp: 0,
@@ -189,6 +202,12 @@ export default function DashboardPage() {
 
   const activeTradesRef = useRef({});
   const lastProcessedCandleTime = useRef(null);
+  const lastTickTimeRef = useRef(Date.now());
+  const dailyRiskStateRef = useRef({
+    tradesCount: 0,
+    consecutiveLosses: 0,
+    totalPnL: 0,
+  });
 
   // 💾 1. Load Stored Sessions & Active Trades on Mount
   useEffect(() => {
@@ -220,6 +239,19 @@ export default function DashboardPage() {
       console.warn("Could not save trades to storage:", e);
     }
   };
+
+  // Stale Data & WebSocket Health Monitor
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const timeSinceLastTick = Date.now() - lastTickTimeRef.current;
+      if (timeSinceLastTick > 12000 && wsConnected) {
+        console.warn("Stale data detected! Reconnecting WebSocket feed...");
+        setWsConnected(false);
+        if (wsRef.current) wsRef.current.close();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [wsConnected]);
 
   const handleStockChange = (stock) => {
     setData([]);
@@ -270,7 +302,7 @@ export default function DashboardPage() {
     };
   }, [currentStock.token, selectedTF]);
 
-  // 3. Real-Time SmartStream Multi-Token Subscription
+  // 3. Real-Time SmartStream Multi-Token Subscription & Auto-Reconnection
   useEffect(() => {
     let isMounted = true;
 
@@ -295,6 +327,7 @@ export default function DashboardPage() {
         ws.onopen = () => {
           if (!isMounted) return;
           setWsConnected(true);
+          lastTickTimeRef.current = Date.now();
 
           const poolTokens = STOCK_POOL.map((s) => String(s.token));
 
@@ -325,6 +358,7 @@ export default function DashboardPage() {
 
         ws.onmessage = (event) => {
           if (!(event.data instanceof ArrayBuffer)) return;
+          lastTickTimeRef.current = Date.now();
           const tick = parseBinaryPacket(event.data);
           if (!tick || !tick.ltp || tick.ltp <= 0) return;
 
@@ -380,7 +414,12 @@ export default function DashboardPage() {
         };
 
         ws.onerror = () => isMounted && setWsConnected(false);
-        ws.onclose = () => isMounted && setWsConnected(false);
+        ws.onclose = () => {
+          if (isMounted) {
+            setWsConnected(false);
+            setTimeout(connectWebSocket, 3000);
+          }
+        };
       } catch (err) {
         if (isMounted) setWsConnected(false);
       }
@@ -399,6 +438,12 @@ export default function DashboardPage() {
     return computeAll(data, Number(selectedTF));
   }, [data, selectedTF]);
 
+  const marketRegime = useMemo(() => detectMarketRegime(data), [data]);
+  const indicatorConflict = useMemo(
+    () => checkIndicatorConflicts(ind?.scores),
+    [ind?.scores],
+  );
+
   // 🕯️ 1. Detect Candlestick Pattern on Active Stock Candles
   const candlePattern = useMemo(() => {
     return detectCandlePattern(data);
@@ -415,10 +460,10 @@ export default function DashboardPage() {
     technicalScore: 0,
   };
 
-  // 🎯 2. Combined Composite Score: 80% 7-Indicators + 20% Candlestick Price Action
+  // 🎯 2. Combined Composite Score
   const finalCompositeScore = useMemo(() => {
     const baseScore = scores.technicalScore || 0;
-    const candleBoost = candlePattern.score || 0; // ±18 to ±25 pts
+    const candleBoost = candlePattern.score || 0;
     return Math.max(
       -100,
       Math.min(100, Math.round(baseScore * 0.8 + candleBoost)),
@@ -492,14 +537,14 @@ export default function DashboardPage() {
     setScreenerLoading(false);
   };
 
-  // 🚨 Synchronized Execution Engine (Indicators + Candlestick Double Check)
+  // 🚨 Synchronized Execution Engine with Advanced Guards & Daily Risk Shields
   useEffect(() => {
     if (!ind?.latest?.price || !data || data.length < 2) return;
-
-    // 🛑 मार्केट बंद होने पर कोई नया सिग्नल या कॉल ट्रिगर न हो
     if (!marketLive) return;
-
     if (!isExecutionTimeframe) return;
+
+    // Emergency Kill Switch Guard
+    if (checkKillSwitch()) return;
 
     const stockToken = String(currentStock.token);
     const activeTrade = activeTradesRef.current[stockToken];
@@ -524,15 +569,12 @@ export default function DashboardPage() {
 
       const isStagnant = Date.now() > activeTrade.maxTime;
 
-      // 🚨 1. VWAP Breach Exit
       if (isBuyVwapBreach || isSellVwapBreach) {
         playAlertTone("EXIT_NOW");
         setActiveAlert({
           type: "EXIT_NOW",
           symbol: currentStock.symbol,
-          reason: isBuyVwapBreach
-            ? "Price broke below Session VWAP (Buffer confirmed)"
-            : "Price broke above Session VWAP (Buffer confirmed)",
+          reason: "Price breached Session VWAP buffer",
           exitPrice: currentPrice,
           vwapPrice: vwap,
         });
@@ -541,43 +583,41 @@ export default function DashboardPage() {
         return;
       }
 
-      // 🎯 2. Target 1 Reached
       if (isTargetHit) {
         playAlertTone("BUY");
         setActiveAlert({
           type: "TARGET_HIT",
           symbol: currentStock.symbol,
           exitPrice: currentPrice,
-          message:
-            "🎯 Target 1 reached! Book partial profits or move Stop Loss to Cost.",
+          message: "🎯 Target 1 reached! Secure partial profits.",
         });
+        dailyRiskStateRef.current.tradesCount += 1;
         delete activeTradesRef.current[stockToken];
         persistTrades();
         return;
       }
 
-      // 🛑 3. Stop Loss Hit
       if (isSlHit) {
         playAlertTone("SL_HIT");
         setActiveAlert({
           type: "SL_HIT",
           symbol: currentStock.symbol,
           exitPrice: currentPrice,
-          message:
-            "🛑 Stop Loss hit. Exit immediately to protect your capital!",
+          message: "🛑 Stop Loss hit. Capital protected.",
         });
+        dailyRiskStateRef.current.tradesCount += 1;
+        dailyRiskStateRef.current.consecutiveLosses += 1;
         delete activeTradesRef.current[stockToken];
         persistTrades();
         return;
       }
 
-      // ⏳ 4. Stagnation Timeout (25 Minutes Decay)
       if (isStagnant) {
         playAlertTone("EXIT_NOW");
         setActiveAlert({
           type: "EXIT_NOW",
           symbol: currentStock.symbol,
-          reason: "25-Minute Timeout: Momentum has slowed down.",
+          reason: "25-Minute Timeout Decay reached.",
           exitPrice: currentPrice,
           vwapPrice: vwap,
         });
@@ -589,7 +629,25 @@ export default function DashboardPage() {
       return;
     }
 
-    // --- B. FRESH SIGNAL TRIGGER (Candle Close + High-Conviction Sync) ---
+    // --- B. ADVANCED GUARDS & RISK SHIELDS ---
+    const dailyRiskCheck = checkDailyRiskLimits(
+      dailyRiskStateRef.current.tradesCount,
+      dailyRiskStateRef.current.consecutiveLosses,
+      dailyRiskStateRef.current.totalPnL,
+    );
+    if (!dailyRiskCheck.allowed) return;
+
+    const cooldownCheck = checkSignalCooldown(10);
+    if (!cooldownCheck.allowed) return;
+
+    const prevClose = data[data.length - 2]?.close || currentPrice;
+    const liquidityCheck = checkMarketLiquidityAndGaps(
+      data,
+      currentPrice,
+      prevClose,
+    );
+    if (!liquidityCheck.passed) return;
+
     const completedCandle = data[data.length - 2];
     if (
       !completedCandle ||
@@ -599,8 +657,9 @@ export default function DashboardPage() {
     }
 
     if (!isHighMomentumTimeWindow) return;
+    if (marketRegime === "CHOPPY_SIDEWAYS") return;
+    if (indicatorConflict.hasConflict) return;
 
-    // 🛡️ Candlestick Veto Filters
     const isBearishRejectionCandle =
       candlePattern.bias.includes("BEARISH") &&
       candlePattern.type === "REVERSAL";
@@ -608,7 +667,7 @@ export default function DashboardPage() {
       candlePattern.bias.includes("BULLISH") &&
       candlePattern.type === "REVERSAL";
 
-    // 🚀 BUY Trigger: Combined Score >= 65 + Index NOT Bearish + NO Bearish Rejection Candle
+    // 🚀 BUY Trigger
     if (
       finalCompositeScore >= 65 &&
       niftyBias !== "BEARISH" &&
@@ -643,7 +702,7 @@ export default function DashboardPage() {
       playAlertTone("BUY");
     }
 
-    // 🔻 SELL Trigger: Combined Score <= -65 + Index NOT Bullish + NO Bullish Rejection Candle
+    // 🔻 SELL Trigger
     else if (
       finalCompositeScore <= -65 &&
       niftyBias !== "BULLISH" &&
@@ -688,12 +747,14 @@ export default function DashboardPage() {
     marketLive,
     isHighMomentumTimeWindow,
     niftyBias,
+    marketRegime,
+    indicatorConflict,
   ]);
 
   const stockTokenStr = String(currentStock.token);
-  // 🛑 मार्केट बंद होने पर कोई भी एक्टिव सेटअप नहीं दिखेगा
   const isSetupActive =
     marketLive &&
+    !killSwitchActive &&
     (Math.abs(finalCompositeScore) >= 65 ||
       !!activeTradesRef.current[stockTokenStr]);
 
@@ -711,13 +772,13 @@ export default function DashboardPage() {
           className="brand-group"
           style={{ display: "flex", alignItems: "center", gap: "10px" }}
         >
-          <h1 className="title">NSE INTRADAY BIAS // TERMINAL</h1>
+          <h1 className="title">NSE INTRADAY BIAS // TERMINAL V2</h1>
           {SessionStatus ? <SessionStatus /> : null}
 
           {/* NIFTY 50 Live Indicator */}
           <div
             className="has-tooltip"
-            data-tip="NIFTY 50 Market Direction. If Nifty drops below -0.20%, BUY calls are blocked to prevent false breakouts."
+            data-tip="NIFTY 50 Market Direction. Filters counter-trend momentum traps."
             style={{
               display: "flex",
               alignItems: "center",
@@ -760,7 +821,7 @@ export default function DashboardPage() {
 
           <span
             className="has-tooltip"
-            data-tip="Angel One SmartStream V2 WebSocket feed is live and streaming real-time ticks."
+            data-tip="Angel One SmartStream V2 WebSocket feed with Auto-Reconnection & Stale Data protection."
             style={{
               fontSize: "0.72rem",
               padding: "3px 8px",
@@ -772,35 +833,55 @@ export default function DashboardPage() {
               border: `1px solid ${wsConnected ? "#2FD98A" : "#FF5D5D"}`,
             }}
           >
-            {wsConnected ? "● LIVE" : "○ DISCONNECTED"}
+            {wsConnected ? "● LIVE" : "○ RECONNECTING..."}
           </span>
 
           <span
             className="has-tooltip"
-            data-tip="Best Trading Hours: 09:30-11:30 AM & 01:30-02:45 PM. Lunch hours (11:30-01:30) are muted to avoid sideways chop."
+            data-tip={`Market Regime: ${marketRegime}. Chop zones automatically suppress false breakouts.`}
             style={{
               fontSize: "0.72rem",
               padding: "3px 8px",
               borderRadius: 4,
-              background: isHighMomentumTimeWindow
-                ? "rgba(47, 217, 138, 0.1)"
-                : "rgba(245, 184, 65, 0.1)",
-              color: isHighMomentumTimeWindow ? "#2FD98A" : "#F5B841",
-              border: `1px solid ${
-                isHighMomentumTimeWindow ? "#2FD98A40" : "#F5B84140"
-              }`,
+              background:
+                marketRegime === "TRENDY_MOMENTUM"
+                  ? "rgba(47, 217, 138, 0.1)"
+                  : "rgba(245, 184, 65, 0.1)",
+              color: marketRegime === "TRENDY_MOMENTUM" ? "#2FD98A" : "#F5B841",
+              border: `1px solid ${marketRegime === "TRENDY_MOMENTUM" ? "#2FD98A40" : "#F5B84140"}`,
               fontWeight: 600,
             }}
           >
-            {isHighMomentumTimeWindow
-              ? "⚡ ACTIVE ZONE"
-              : "⏸ DEAD / LUNCH ZONE"}
+            {marketRegime === "TRENDY_MOMENTUM" ? "📈 TRENDY" : "📉 CHOPPY"}
           </span>
+
+          {/* Emergency Kill Switch Toggle */}
+          <button
+            onClick={() => {
+              const newState = !killSwitchActive;
+              setKillSwitchActive(newState);
+              toggleKillSwitch(newState);
+            }}
+            style={{
+              fontSize: "0.72rem",
+              padding: "3px 8px",
+              borderRadius: 4,
+              background: killSwitchActive
+                ? "#FF5D5D"
+                : "rgba(255, 93, 93, 0.15)",
+              color: killSwitchActive ? "#fff" : "#FF5D5D",
+              border: "1px solid #FF5D5D",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            {killSwitchActive ? "🚨 KILL SWITCH ACTIVE" : "⚡ KILL SWITCH"}
+          </button>
 
           <Link
             href="/tips"
             className="has-tooltip"
-            data-tip="Click to view execution rules, position sizing, and risk management guidelines."
+            data-tip="View risk playbook and institutional sizing guidelines."
             style={{
               fontSize: "0.72rem",
               padding: "4px 10px",
@@ -822,7 +903,7 @@ export default function DashboardPage() {
         >
           <div
             className="tf-group has-tooltip"
-            data-tip="Trade signals are strictly locked to the 5M chart. 1m, 3m, and 15m views are for trend analysis only."
+            data-tip="Trade signals are strictly locked to the 5M timeframe."
           >
             {TIMEFRAMES.map((tf) => (
               <button
@@ -842,7 +923,7 @@ export default function DashboardPage() {
 
           <span
             className="active-ticker has-tooltip"
-            data-tip="Currently selected active stock."
+            data-tip="Active stock symbol."
             style={{ minWidth: "95px", textAlign: "center" }}
           >
             {currentStock.symbol}
@@ -880,8 +961,6 @@ export default function DashboardPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span
-              className="has-tooltip"
-              data-tip="Scans all ₹50–₹1,000 stocks in real-time matching institutional momentum setups."
               style={{
                 fontSize: "0.82rem",
                 fontWeight: 800,
@@ -931,7 +1010,6 @@ export default function DashboardPage() {
                 fontSize: "0.75rem",
                 fontWeight: 700,
                 cursor: screenerLoading ? "not-allowed" : "pointer",
-                transition: "background 0.2s ease",
               }}
             >
               {screenerLoading ? "SCANNING POOL..." : "⚡ RUN SCAN"}
@@ -950,7 +1028,7 @@ export default function DashboardPage() {
         >
           {screenerMatches.length === 0 && !screenerLoading && (
             <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-              Click 'RUN SCAN' to search for matching stocks.
+              Click 'RUN SCAN' to search pool matching strategies.
             </span>
           )}
 
@@ -958,8 +1036,6 @@ export default function DashboardPage() {
             <button
               key={st.token}
               onClick={() => handleStockChange(st)}
-              className="has-tooltip"
-              data-tip={`Click to load live chart and combined bias matrix for ${st.symbol}.`}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1007,49 +1083,31 @@ export default function DashboardPage() {
       {/* Primary Grid */}
       <div className="grid-main">
         <section className="card gauge-card">
-          <h2
-            className="card-title has-tooltip"
-            data-tip="Combined score of 7 Indicators (80%) + Candlestick Price Action (20%). Moves between -100 to +100."
-          >
-            COMPOSITE INTRADAY BIAS ⓘ
-          </h2>
+          <h2 className="card-title">COMPOSITE INTRADAY BIAS ⓘ</h2>
 
-          {/* 🏎️ Analog Speedometer */}
           {Gauge ? <Gauge score={finalCompositeScore} /> : null}
 
           <div className="quick-stats">
-            <div
-              className="stat-box has-tooltip"
-              data-tip="Last Traded Price (LTP): The current real-time market price of this stock."
-            >
+            <div className="stat-box">
               <span className="stat-lbl">Live Spot LTP ⓘ</span>
               <span className="stat-num" style={{ color: "#2FD98A" }}>
                 ₹{fmt(ind?.latest?.price)}
               </span>
             </div>
 
-            <div
-              className="stat-box has-tooltip"
-              data-tip="Volume Weighted Average Price (VWAP): Institutional benchmark. Trade BUY above VWAP, and SELL below VWAP."
-            >
+            <div className="stat-box">
               <span className="stat-lbl">Session VWAP ⓘ</span>
               <span className="stat-num">₹{fmt(ind?.latest?.vwap)}</span>
             </div>
 
-            <div
-              className="stat-box has-tooltip"
-              data-tip="Central Pivot (CPR): Major daily support/resistance level. Bullish above CPR, Bearish below CPR."
-            >
+            <div className="stat-box">
               <span className="stat-lbl">Central Pivot (CPR) ⓘ</span>
               <span className="stat-num" style={{ color: "#c084fc" }}>
                 ₹{fmt(ind?.cpr?.pivot)}
               </span>
             </div>
 
-            <div
-              className="stat-box has-tooltip"
-              data-tip="Bollinger Band Squeeze: Volatility is very tight. Expect an explosive breakout soon."
-            >
+            <div className="stat-box">
               <span className="stat-lbl">Volatility State ⓘ</span>
               <span
                 className="stat-num"
@@ -1059,16 +1117,11 @@ export default function DashboardPage() {
                   color: ind?.bb?.isSqueeze ? "#f97316" : "#2FD98A",
                 }}
               >
-                {ind?.bb?.isSqueeze
-                  ? "⚡ BB SQUEEZE (Coiling)"
-                  : "Normal Volatility"}
+                {ind?.bb?.isSqueeze ? "⚡ BB SQUEEZE" : "Normal Volatility"}
               </span>
             </div>
 
-            <div
-              className="stat-box full-width has-tooltip"
-              data-tip="Opening Range (ORB): High and Low of the first 15 minutes (9:15-9:30 AM). Breaking this range signals intraday momentum."
-            >
+            <div className="stat-box full-width">
               <span className="stat-lbl">Opening Range (ORB) ⓘ</span>
               <span className="stat-num orb-state">
                 {ind?.orbState || "Inside Range"}
@@ -1093,10 +1146,7 @@ export default function DashboardPage() {
                 {selectedTF}M CANDLESTICK STRUCTURE & CPR
               </h2>
 
-              {/* 🕯️ Real-Time Candlestick Pattern HUD Badge */}
               <div
-                className="has-tooltip"
-                data-tip={candlePattern.tooltip}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1108,16 +1158,8 @@ export default function DashboardPage() {
                   fontSize: "0.74rem",
                   fontWeight: 800,
                   color: patternBadgeColor,
-                  cursor: "help",
                 }}
               >
-                <span>
-                  {candlePattern.bias.includes("BULLISH")
-                    ? "⚡"
-                    : candlePattern.bias.includes("BEARISH")
-                      ? "🔻"
-                      : "⚖️"}
-                </span>
                 <span>CANDLE: {candlePattern.name.toUpperCase()}</span>
                 <span
                   style={{
@@ -1126,44 +1168,27 @@ export default function DashboardPage() {
                     padding: "1px 5px",
                     borderRadius: "3px",
                     color: "#cbd5e1",
-                    fontWeight: 600,
                   }}
                 >
                   {candlePattern.type}
                 </span>
-                <span style={{ color: "#64748b", fontSize: "0.7rem" }}>ⓘ</span>
               </div>
             </div>
 
             <div className="legend" style={{ marginTop: "8px" }}>
-              <span
-                className="leg-item has-tooltip"
-                data-tip="EMA 9: Fast short-term momentum line."
-              >
+              <span className="leg-item">
                 <span className="dot dot-e9" /> EMA 9
               </span>
-              <span
-                className="leg-item has-tooltip"
-                data-tip="EMA 21: Intermediate trend direction."
-              >
+              <span className="leg-item">
                 <span className="dot dot-e21" /> EMA 21
               </span>
-              <span
-                className="leg-item has-tooltip"
-                data-tip="VWAP: Volume-weighted institutional average line."
-              >
+              <span className="leg-item">
                 <span className="dot dot-vwap" /> VWAP
               </span>
-              <span
-                className="leg-item has-tooltip"
-                data-tip="CPR Band: Top Central (TC), Pivot, and Bottom Central (BC) zones."
-              >
+              <span className="leg-item">
                 <span className="box box-cpr" /> CPR Band
               </span>
-              <span
-                className="leg-item has-tooltip"
-                data-tip="ORB: First 15-minute high and low boundary."
-              >
+              <span className="leg-item">
                 <span className="box box-orb" /> ORB
               </span>
             </div>
@@ -1218,8 +1243,6 @@ export default function DashboardPage() {
             />
           ) : (
             <div
-              className="has-tooltip"
-              data-tip="No trade setup until score reaches ±65 with candle confirmation. This rule protects you from overtrading in choppy sideways markets."
               style={{
                 marginTop: "16px",
                 padding: "16px 20px",
@@ -1239,7 +1262,9 @@ export default function DashboardPage() {
                     width: "8px",
                     height: "8px",
                     borderRadius: "50%",
-                    background: "#64748b",
+                    background: indicatorConflict.hasConflict
+                      ? "#FF5D5D"
+                      : "#64748b",
                   }}
                 />
                 <span
@@ -1249,15 +1274,15 @@ export default function DashboardPage() {
                     fontWeight: 600,
                   }}
                 >
-                  NEUTRAL CONSOLIDATION // NO ACTIVE 5M CALL
+                  {killSwitchActive
+                    ? "🚨 EMERGENCY KILL SWITCH ENABLED // ALL SIGNALS BLOCKED"
+                    : indicatorConflict.hasConflict
+                      ? indicatorConflict.message
+                      : "NEUTRAL CONSOLIDATION // NO ACTIVE 5M CALL"}
                 </span>
               </div>
               <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-                Score:{" "}
-                {finalCompositeScore > 0
-                  ? `+${finalCompositeScore}`
-                  : finalCompositeScore}{" "}
-                pts (Threshold: ±65)
+                Score: {finalCompositeScore} pts (Threshold: ±65)
               </span>
             </div>
           )
@@ -1277,8 +1302,8 @@ export default function DashboardPage() {
             }}
           >
             <span>
-              ⚠️ <strong>{selectedTF}M VIEW ACTIVE:</strong> Trade execution
-              engine and signals are locked strictly to 5M candles.
+              ⚠️ <strong>{selectedTF}M VIEW ACTIVE:</strong> Signals locked
+              strictly to 5M candles.
             </span>
             <button
               onClick={() => setSelectedTF("5")}
@@ -1298,7 +1323,6 @@ export default function DashboardPage() {
           </div>
         ))}
 
-      {/* ⭐ Accuracy Tracker Widget */}
       <AccuracyTracker
         activeAlert={activeAlert}
         currentPrice={ind?.latest?.price}
@@ -1312,22 +1336,23 @@ export default function DashboardPage() {
           atr={currentAtr}
         />
       ) : null}
+      <AiAnalystPanel
+        symbol={currentStock.symbol}
+        score={finalCompositeScore}
+        ind={ind}
+        pattern={candlePattern}
+      />
 
       {/* Secondary Indicators */}
       <div className="grid-secondary">
         <section className="card indicators-card">
-          <h2
-            className="card-title has-tooltip"
-            data-tip="Weights assigned to each indicator based on institutional importance. VWAP (22%) and EMA Stack (18%) carry the highest weight."
-          >
-            INSTITUTIONAL WEIGHTED MATRIX ⓘ
-          </h2>
+          <h2 className="card-title">INSTITUTIONAL WEIGHTED MATRIX ⓘ</h2>
           <div className="ind-list">
             <TooltipIndicatorBar
               name="VWAP Stretch (22%)"
               score={scores.vwapScore}
               detail={ind?.latest?.vwap ? `₹${fmt(ind.latest.vwap)}` : "—"}
-              tooltip="Distance of price from VWAP. When too far, price often pulls back to VWAP (mean-reversion risk)."
+              tooltip="Distance of price from VWAP."
             />
             <TooltipIndicatorBar
               name="9/21 EMA Stack (18%)"
@@ -1335,37 +1360,37 @@ export default function DashboardPage() {
               detail={
                 scores.trendScore >= 0 ? "Bullish Stack" : "Bearish Stack"
               }
-              tooltip="EMA 9 above EMA 21 signals bullish trend. EMA 9 below EMA 21 signals bearish trend."
+              tooltip="Fast vs Intermediate trend stacking."
             />
             <TooltipIndicatorBar
               name="MACD Acceleration (18%)"
               score={scores.macdScore}
               detail={fmt(ind?.latest?.hist, 3)}
-              tooltip="Measures price momentum speed. Rising green bars show strong buyer conviction."
+              tooltip="Momentum speed and histogram velocity."
             />
             <TooltipIndicatorBar
               name="RSI 14 Relative Strength (14%)"
               score={scores.rsiScore}
               detail={fmt(ind?.latest?.rsi, 1)}
-              tooltip="RSI > 55 means bulls are in control. RSI < 45 means bears are in control. Near 50 is sideways."
+              tooltip="Relative strength boundary mapping."
             />
             <TooltipIndicatorBar
               name="CPR Institutional Position (12%)"
               score={scores.cprScore}
               detail={ind?.cprState || "Inside CPR"}
-              tooltip="Price position relative to daily Central Pivot. Confirms if big players are buying or selling."
+              tooltip="Central Pivot Range positioning."
             />
             <TooltipIndicatorBar
               name="Opening Range Breakout (8%)"
               score={scores.orbScore}
               detail={ind?.orbState || "Inside Range"}
-              tooltip="Has the stock broken above or below the first 15-minute range? Breakouts offer quick momentum."
+              tooltip="First 15-minute range breach tracking."
             />
             <TooltipIndicatorBar
               name="Relative Volume Surge (8%)"
               score={scores.volScore}
               detail={`${scores.volScore >= 0 ? "+" : ""}${fmt(scores.volScore, 1)} pts`}
-              tooltip="Volume compared to the last 20 candles average. Moves without volume are often bull/bear traps."
+              tooltip="Volume comparison against 20-period average."
             />
           </div>
         </section>
@@ -1373,12 +1398,9 @@ export default function DashboardPage() {
         <section className="card oscillators-card">
           <h2 className="card-title">INTRADAY OSCILLATORS</h2>
           <div className="sparkline-group">
-            <div
-              className="sparkline-item has-tooltip"
-              data-tip="RSI 14 live momentum curve. Bullish above 50, Bearish below 50."
-            >
+            <div className="sparkline-item">
               <div className="spark-header">
-                <span>RSI 14 Momentum ⓘ</span>
+                <span>RSI 14 Momentum</span>
                 <span>{fmt(ind?.latest?.rsi, 1)}</span>
               </div>
               {MiniChart && (
@@ -1393,12 +1415,9 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div
-              className="sparkline-item has-tooltip"
-              data-tip="MACD histogram velocity. Rising bars confirm strong price acceleration."
-            >
+            <div className="sparkline-item">
               <div className="spark-header">
-                <span>MACD Histogram Velocity ⓘ</span>
+                <span>MACD Histogram Velocity</span>
                 <span>{fmt(ind?.latest?.hist, 3)}</span>
               </div>
               {MiniChart && (
