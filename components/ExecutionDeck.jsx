@@ -1,119 +1,71 @@
 // components/ExecutionDeck.jsx
 "use client";
 
-import { useState, useMemo } from "react";
 import { fmt } from "@/lib/utils";
 
 export default function ExecutionDeck({
-  symbol,
+  symbol = "STOCK",
   token,
   exchangeSegment = 1,
   currentPrice = 0,
+  entryPrice,
   side = "BUY",
   levels = {},
-  atr = 1.5,
+  atr = 1,
   score = 0,
+  volumeData = { current: 0, average: 0 },
+  onManualExit,
+  isLiveTrade = false, // True jab actual trade record active ho
 }) {
-  const [maxRisk, setMaxRisk] = useState(1000);
-  const [addedStatus, setAddedStatus] = useState(false);
+  const isBuy = side === "BUY";
 
-  const price = Number(currentPrice) || 0;
-  const safeAtr = Number(atr) > 0 ? Number(atr) : price * 0.01;
+  // 🔒 Fix: Live trade me currentPrice ko entry kabhi mat maano, levels.entry strictly freeze rahega
+  const effectiveEntry = Number(
+    levels.entry || entryPrice || (isLiveTrade ? 0 : currentPrice),
+  );
+  const effectiveSl = Number(levels.stopLoss || levels.sl || 0);
+  const effectiveT1 = Number(levels.target1 || levels.t1 || 0);
+  const effectiveT2 = Number(levels.target2 || levels.t2 || 0);
 
-  const tradeLevels = useMemo(() => {
-    const isBuy = side.toUpperCase() === "BUY";
-    const slDist = safeAtr * 1.5;
+  // Position Sizing (Fixed ₹1,000 Risk per trade on ₹1,00,000 Capital)
+  const maxRiskAmount = 1000;
+  const perShareRisk = Math.max(0.5, Math.abs(effectiveEntry - effectiveSl));
+  const suggestedQty = Math.max(1, Math.floor(maxRiskAmount / perShareRisk));
+  const totalMarginRequired = Math.round(
+    (suggestedQty * (effectiveEntry || currentPrice)) / 5,
+  ); // 5x MIS Leverage
 
-    const stopLoss =
-      Number(levels?.stopLoss || levels?.sl) ||
-      (isBuy ? price - slDist : price + slDist);
+  // Real-Time PnL Calculation (Sirf active positions par live tick se track hoga)
+  const pnlPerShare = isLiveTrade
+    ? isBuy
+      ? currentPrice - effectiveEntry
+      : effectiveEntry - currentPrice
+    : 0;
+  const totalPnL = Number((pnlPerShare * suggestedQty).toFixed(2));
+  const pnlPercent = Number(
+    ((pnlPerShare / (effectiveEntry || 1)) * 100).toFixed(2),
+  );
+  const isProfit = totalPnL >= 0;
 
-    const target1 =
-      Number(levels?.target1) ||
-      (isBuy ? price + slDist * 1.5 : price - slDist * 1.5);
-
-    const target2 =
-      Number(levels?.target2) ||
-      (isBuy ? price + slDist * 2.5 : price - slDist * 2.5);
-
-    const riskPerShare = Math.max(0.05, Math.abs(price - stopLoss));
-
-    return {
-      stopLoss,
-      target1,
-      target2,
-      riskPerShare,
-    };
-  }, [price, side, safeAtr, levels]);
-
-  const quantity = useMemo(() => {
-    if (tradeLevels.riskPerShare <= 0) return 0;
-    return Math.floor(maxRisk / tradeLevels.riskPerShare);
-  }, [maxRisk, tradeLevels.riskPerShare]);
-
-  const totalCapitalRequired = Math.round(quantity * price);
-  const isBuy = side.toUpperCase() === "BUY";
-  const themeColor = isBuy ? "#2FD98A" : "#FF5D5D";
-
-  // ⭐️ Manual Add to Simple Watchlist Tracker
-  const handleAddToTracker = () => {
-    try {
-      const saved = localStorage.getItem("terminal_simple_watchlist");
-      const list = saved ? JSON.parse(saved) : [];
-
-      // Check if already running
-      const exists = list.some(
-        (item) => item.symbol === symbol && item.status === "RUNNING",
-      );
-      if (exists) {
-        setAddedStatus(true);
-        setTimeout(() => setAddedStatus(false), 2000);
-        return;
-      }
-
-      const newEntry = {
-        id: Date.now(),
-        symbol: symbol,
-        token: token || "0",
-        exchangeSegment: exchangeSegment,
-        side: side.toUpperCase(),
-        entryPrice: price,
-        target1: tradeLevels.target1,
-        sl: tradeLevels.stopLoss,
-        status: "RUNNING",
-        time: new Date().toLocaleTimeString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-
-      const updated = [newEntry, ...list];
-      localStorage.setItem(
-        "terminal_simple_watchlist",
-        JSON.stringify(updated),
-      );
-
-      setAddedStatus(true);
-      setTimeout(() => setAddedStatus(false), 2000);
-
-      // Trigger a custom event so the tracker component updates immediately
-      window.dispatchEvent(new Event("storage_watchlist_updated"));
-    } catch (e) {
-      console.warn("Could not add to tracker:", e);
-    }
-  };
+  // Target 1 Milestone Progress
+  const targetDistance = Math.abs(effectiveT1 - effectiveEntry);
+  const currentProgress =
+    isLiveTrade && targetDistance > 0
+      ? Math.min(100, Math.max(0, (pnlPerShare / targetDistance) * 100))
+      : 0;
 
   return (
-    <div
+    <section
       style={{
-        marginTop: "16px",
-        padding: "16px",
-        background: "rgba(15, 23, 42, 0.7)",
-        border: `1px solid ${themeColor}40`,
+        margin: "16px 0",
+        padding: "16px 20px",
+        background: "#080d1a",
+        border: `1px solid ${isBuy ? "#2FD98A40" : "#FF5D5D40"}`,
         borderRadius: "8px",
+        boxShadow: `0 4px 20px ${isBuy ? "rgba(47, 217, 138, 0.05)" : "rgba(255, 93, 93, 0.05)"}`,
       }}
     >
-      {/* Header Info */}
+      {/* Header Deck Bar */}
       <div
         style={{
           display: "flex",
@@ -121,6 +73,8 @@ export default function ExecutionDeck({
           alignItems: "center",
           flexWrap: "wrap",
           gap: "10px",
+          borderBottom: "1px solid #1e293b",
+          paddingBottom: "12px",
           marginBottom: "14px",
         }}
       >
@@ -128,230 +82,274 @@ export default function ExecutionDeck({
           <span
             style={{
               padding: "4px 10px",
-              background: `${themeColor}20`,
-              border: `1px solid ${themeColor}`,
               borderRadius: "4px",
-              color: themeColor,
+              background: isLiveTrade
+                ? isBuy
+                  ? "#2FD98A"
+                  : "#FF5D5D"
+                : "#f59e0b",
+              color: "#000",
               fontWeight: 800,
-              fontSize: "0.85rem",
-              letterSpacing: "0.04em",
+              fontSize: "0.8rem",
+              letterSpacing: "0.5px",
             }}
           >
-            ACTIVE SETUP: {side} // {symbol}
-          </span>
-          <span style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
-            Score:{" "}
-            <strong style={{ color: themeColor }}>
-              {score > 0 ? `+${score}` : score} pts
-            </strong>
+            {isLiveTrade
+              ? `ACTIVE ${side} POSITION`
+              : `POTENTIAL ${side} BREAKOUT`}
           </span>
 
-          {/* ⭐️ Add to Tracker Button */}
-          <button
-            onClick={handleAddToTracker}
+          <span style={{ fontSize: "1rem", fontWeight: 800, color: "#f8fafc" }}>
+            {symbol}
+          </span>
+
+          <span
             style={{
-              background: addedStatus
-                ? "rgba(47, 217, 138, 0.2)"
-                : "rgba(59, 130, 246, 0.15)",
-              border: `1px solid ${
-                addedStatus ? "#2FD98A" : "rgba(59, 130, 246, 0.4)"
-              }`,
-              color: addedStatus ? "#2FD98A" : "#60a5fa",
-              padding: "3px 10px",
+              fontSize: "0.75rem",
+              color: "#94a3b8",
+              fontFamily: "monospace",
+              background: "#0f172a",
+              padding: "2px 8px",
               borderRadius: "4px",
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all 0.2s ease",
+              border: "1px solid #334155",
             }}
           >
-            {addedStatus ? "✓ Added to Tracker" : "+ Add to Tracker"}
-          </button>
+            LTP: ₹{fmt(currentPrice)}
+          </span>
         </div>
 
-        <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
-          <span>ATR(14): ₹{fmt(safeAtr)}</span> |{" "}
-          <span>
-            LTP:{" "}
-            <strong style={{ color: "#f8fafc", fontFamily: "monospace" }}>
-              ₹{fmt(price)}
-            </strong>
-          </span>
+        {/* Live Floating P&L Tracker */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: "0.68rem",
+                color: "#94a3b8",
+                textTransform: "uppercase",
+              }}
+            >
+              Floating P&L ({suggestedQty} Qty)
+            </div>
+            <div
+              style={{
+                fontSize: "1.05rem",
+                fontWeight: 800,
+                color: !isLiveTrade
+                  ? "#94a3b8"
+                  : isProfit
+                    ? "#2FD98A"
+                    : "#FF5D5D",
+                fontFamily: "monospace",
+              }}
+            >
+              {!isLiveTrade
+                ? "₹0.00 (Pending Entry)"
+                : `${isProfit ? "+" : ""}₹${fmt(totalPnL)} (${isProfit ? "+" : ""}${pnlPercent}%)`}
+            </div>
+          </div>
+
+          {onManualExit && isLiveTrade && (
+            <button
+              onClick={onManualExit}
+              style={{
+                background: "rgba(255, 93, 93, 0.15)",
+                color: "#FF5D5D",
+                border: "1px solid #FF5D5D",
+                padding: "6px 12px",
+                borderRadius: "4px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              SQUARE OFF
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Execution Cards Grid */}
+      {/* Primary Execution Matrix Grid */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
           gap: "12px",
+          marginBottom: "14px",
         }}
       >
-        {/* Stop Loss Card */}
+        {/* Entry Level */}
         <div
           style={{
-            background: "rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(255, 93, 93, 0.3)",
-            borderRadius: "6px",
             padding: "10px 12px",
+            background: "#0f172a",
+            borderRadius: "6px",
+            border: "1px solid #1e293b",
           }}
         >
-          <span
-            style={{ fontSize: "0.68rem", color: "#94a3b8", display: "block" }}
-          >
-            STOP LOSS (SL)
-          </span>
-          <span
+          <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
+            LOCKED ENTRY
+          </div>
+          <div
             style={{
-              fontSize: "1.1rem",
+              fontSize: "1rem",
+              fontWeight: 800,
+              color: "#f8fafc",
+              marginTop: "2px",
+            }}
+          >
+            ₹{fmt(effectiveEntry)}
+          </div>
+          <div style={{ fontSize: "0.65rem", color: "#64748b" }}>
+            Trigger Benchmark
+          </div>
+        </div>
+
+        {/* Hard Stop Loss */}
+        <div
+          style={{
+            padding: "10px 12px",
+            background: "#0f172a",
+            borderRadius: "6px",
+            border: "1px solid #1e293b",
+          }}
+        >
+          <div style={{ fontSize: "0.68rem", color: "#f87171" }}>
+            STOP LOSS (SL)
+          </div>
+          <div
+            style={{
+              fontSize: "1rem",
               fontWeight: 800,
               color: "#FF5D5D",
-              fontFamily: "monospace",
-            }}
-          >
-            ₹{fmt(tradeLevels.stopLoss)}
-          </span>
-          <span
-            style={{
-              fontSize: "0.68rem",
-              color: "#64748b",
-              display: "block",
               marginTop: "2px",
             }}
           >
-            Risk: ₹{fmt(tradeLevels.riskPerShare)}/sh
-          </span>
+            ₹{fmt(effectiveSl)}
+          </div>
+          <div style={{ fontSize: "0.65rem", color: "#fca5a5" }}>
+            Risk: ₹{fmt(Math.abs(effectiveEntry - effectiveSl))}
+          </div>
         </div>
 
-        {/* Target 1 Card */}
+        {/* Target 1 */}
         <div
           style={{
-            background: "rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(47, 217, 138, 0.3)",
-            borderRadius: "6px",
             padding: "10px 12px",
+            background: "#0f172a",
+            borderRadius: "6px",
+            border: "1px solid #1e293b",
           }}
         >
-          <span
-            style={{ fontSize: "0.68rem", color: "#94a3b8", display: "block" }}
-          >
-            TARGET 1 (1:1.5 RR)
-          </span>
-          <span
+          <div style={{ fontSize: "0.68rem", color: "#38bdf8" }}>
+            TARGET 1 (TRAIL SL)
+          </div>
+          <div
             style={{
-              fontSize: "1.1rem",
+              fontSize: "1rem",
               fontWeight: 800,
-              color: "#2FD98A",
-              fontFamily: "monospace",
-            }}
-          >
-            ₹{fmt(tradeLevels.target1)}
-          </span>
-          <span
-            style={{
-              fontSize: "0.68rem",
-              color: "#64748b",
-              display: "block",
+              color: "#38bdf8",
               marginTop: "2px",
             }}
           >
-            Move: {isBuy ? "+" : "-"}₹
-            {fmt(Math.abs(tradeLevels.target1 - price))}
-          </span>
+            ₹{fmt(effectiveT1)}
+          </div>
+          <div style={{ fontSize: "0.65rem", color: "#7dd3fc" }}>
+            Gain: +₹{fmt(Math.abs(effectiveT1 - effectiveEntry))}
+          </div>
         </div>
 
-        {/* Target 2 Card */}
+        {/* Target 2 */}
         <div
           style={{
-            background: "rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(47, 217, 138, 0.3)",
-            borderRadius: "6px",
             padding: "10px 12px",
+            background: "#0f172a",
+            borderRadius: "6px",
+            border: "1px solid #1e293b",
           }}
         >
-          <span
-            style={{ fontSize: "0.68rem", color: "#94a3b8", display: "block" }}
-          >
-            TARGET 2 (1:2.5 RR)
-          </span>
-          <span
+          <div style={{ fontSize: "0.68rem", color: "#2FD98A" }}>
+            TARGET 2 (MAX EXP)
+          </div>
+          <div
             style={{
-              fontSize: "1.1rem",
+              fontSize: "1rem",
               fontWeight: 800,
               color: "#2FD98A",
-              fontFamily: "monospace",
-            }}
-          >
-            ₹{fmt(tradeLevels.target2)}
-          </span>
-          <span
-            style={{
-              fontSize: "0.68rem",
-              color: "#64748b",
-              display: "block",
               marginTop: "2px",
             }}
           >
-            Move: {isBuy ? "+" : "-"}₹
-            {fmt(Math.abs(tradeLevels.target2 - price))}
-          </span>
+            ₹{fmt(effectiveT2)}
+          </div>
+          <div style={{ fontSize: "0.65rem", color: "#86efac" }}>
+            Gain: +₹{fmt(Math.abs(effectiveT2 - effectiveEntry))}
+          </div>
         </div>
 
-        {/* Risk & Position Sizer Card */}
+        {/* Sizing & Leverage */}
         <div
           style={{
-            background: "rgba(0, 0, 0, 0.3)",
-            border: "1px solid #334155",
-            borderRadius: "6px",
             padding: "10px 12px",
+            background: "#0f172a",
+            borderRadius: "6px",
+            border: "1px solid #1e293b",
+          }}
+        >
+          <div style={{ fontSize: "0.68rem", color: "#c084fc" }}>
+            MIS POSITION SIZE
+          </div>
+          <div
+            style={{
+              fontSize: "1rem",
+              fontWeight: 800,
+              color: "#e2e8f0",
+              marginTop: "2px",
+            }}
+          >
+            {suggestedQty} Shares
+          </div>
+          <div style={{ fontSize: "0.65rem", color: "#94a3b8" }}>
+            Margin: ₹{fmt(totalMarginRequired)} (5x)
+          </div>
+        </div>
+      </div>
+
+      {/* Target Progress Bar */}
+      <div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: "0.7rem",
+            color: "#94a3b8",
+            marginBottom: "4px",
+          }}
+        >
+          <span>T1 Milestone Momentum</span>
+          <span>
+            {isLiveTrade && currentProgress > 0
+              ? `${currentProgress.toFixed(1)}%`
+              : "Pending Breakout"}
+          </span>
+        </div>
+        <div
+          style={{
+            width: "100%",
+            height: "6px",
+            background: "#1e293b",
+            borderRadius: "3px",
+            overflow: "hidden",
           }}
         >
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              width: `${currentProgress}%`,
+              height: "100%",
+              background: isProfit ? "#2FD98A" : "#FF5D5D",
+              transition: "width 0.4s ease",
             }}
-          >
-            <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
-              MAX RISK (₹)
-            </span>
-            <input
-              type="number"
-              value={maxRisk}
-              onChange={(e) => setMaxRisk(Number(e.target.value) || 0)}
-              style={{
-                width: "70px",
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color: "#f8fafc",
-                fontSize: "0.75rem",
-                padding: "2px 6px",
-                borderRadius: "4px",
-                textAlign: "right",
-              }}
-            />
-          </div>
-          <span
-            style={{
-              fontSize: "1.1rem",
-              fontWeight: 800,
-              color: "#38bdf8",
-              fontFamily: "monospace",
-              display: "block",
-              marginTop: "4px",
-            }}
-          >
-            {quantity} SHARES
-          </span>
-          <span
-            style={{ fontSize: "0.68rem", color: "#64748b", display: "block" }}
-          >
-            Est. Capital: ₹{totalCapitalRequired.toLocaleString("en-IN")}
-          </span>
+          />
         </div>
       </div>
-    </div>
+    </section>
   );
 }

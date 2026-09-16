@@ -1,8 +1,12 @@
 // app/api/ai-analyst/route.js
-
 import { NextResponse } from "next/server";
+import Groq from "groq-sdk";
 
 const MODEL = "openai/gpt-oss-120b";
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY || "",
+});
 
 const clamp = (n, min = 0, max = 100) =>
   Math.max(min, Math.min(max, Number(n) || 0));
@@ -85,18 +89,14 @@ function candleAnalysis(candles = []) {
     // Engulfing
     if (i > 0) {
       const p = recent[i - 1];
-
       const po = num(p.open);
       const pc = num(p.close);
 
       if (po !== null && pc !== null) {
-        // Bullish engulfing
         if (pc < po && cl > o && o <= pc && cl >= po) {
           bullish += 15;
           patterns.push("Bullish Engulfing");
         }
-
-        // Bearish engulfing
         if (pc > po && cl < o && o >= pc && cl <= po) {
           bearish += 15;
           patterns.push("Bearish Engulfing");
@@ -106,7 +106,6 @@ function candleAnalysis(candles = []) {
   });
 
   const total = Math.max(bullish + bearish, 1);
-
   const bullPct = clamp((bullish / total) * 100);
   const bearPct = clamp((bearish / total) * 100);
 
@@ -121,7 +120,6 @@ function candleAnalysis(candles = []) {
 
 function technicalEngine(body) {
   const { score, ind = {}, market = {} } = body;
-
   const latest = ind?.latest || {};
 
   let bull = 0;
@@ -129,98 +127,58 @@ function technicalEngine(body) {
 
   const bias = num(score) ?? 0;
   const rsi = num(latest.rsi);
-  const price = num(market.price);
+  const price = num(market.price ?? latest.price);
   const vwap = num(latest.vwap);
 
-  // ---------------------------------------
-  // COMPOSITE BIAS
-  // ---------------------------------------
-
+  // 1. Composite Bias
   if (bias >= 65) bull += 25;
   else if (bias >= 45) bull += 12;
   else if (bias <= -65) bear += 25;
   else if (bias <= -45) bear += 12;
 
-  // ---------------------------------------
-  // EMA STRUCTURE
-  // ---------------------------------------
-
+  // 2. EMA Structure
   const ema9 = num(latest.ema9);
   const ema21 = num(latest.ema21);
-
   if (ema9 !== null && ema21 !== null) {
     if (ema9 > ema21) bull += 15;
     if (ema9 < ema21) bear += 15;
   }
 
-  // ---------------------------------------
-  // VWAP
-  // ---------------------------------------
-
+  // 3. VWAP
   if (price !== null && vwap !== null) {
     if (price > vwap) bull += 12;
     if (price < vwap) bear += 12;
   }
 
-  // ---------------------------------------
-  // RSI
-  // ---------------------------------------
-
+  // 4. RSI
   if (rsi !== null) {
     if (rsi >= 55 && rsi <= 70) bull += 10;
     if (rsi >= 30 && rsi <= 45) bear += 10;
-
-    // Extreme RSI = exhaustion risk
     if (rsi > 75) bull -= 6;
     if (rsi < 25) bear -= 6;
   }
 
-  // ---------------------------------------
-  // MACD
-  // ---------------------------------------
-
-  const macd = num(latest.macd);
-  const macdSignal = num(latest.macdSignal);
-
-  if (macd !== null && macdSignal !== null) {
-    if (macd > macdSignal) bull += 10;
-    if (macd < macdSignal) bear += 10;
+  // 5. MACD
+  const hist = num(latest.hist ?? latest.macd);
+  if (hist !== null) {
+    if (hist > 0) bull += 10;
+    if (hist < 0) bear += 10;
   }
 
-  // ---------------------------------------
-  // CPR
-  // ---------------------------------------
-
+  // 6. CPR
   const cpr = String(ind?.cprState || "").toLowerCase();
+  if (cpr.includes("bull") || cpr.includes("above")) bull += 8;
+  if (cpr.includes("bear") || cpr.includes("below")) bear += 8;
 
-  if (cpr.includes("bull") || cpr.includes("above")) {
-    bull += 8;
-  }
-
-  if (cpr.includes("bear") || cpr.includes("below")) {
-    bear += 8;
-  }
-
-  // ---------------------------------------
-  // ORB
-  // ---------------------------------------
-
+  // 7. ORB
   const orb = String(ind?.orbState || "").toLowerCase();
-
-  if (orb.includes("breakout") || orb.includes("above")) {
-    bull += 8;
-  }
-
-  if (orb.includes("breakdown") || orb.includes("below")) {
-    bear += 8;
-  }
+  if (orb.includes("breakout") || orb.includes("above")) bull += 8;
+  if (orb.includes("breakdown") || orb.includes("below")) bear += 8;
 
   const total = Math.max(bull + bear, 1);
-
   const agreement = (Math.max(bull, bear) / total) * 100;
 
   let direction = "HOLD";
-
   if (bull > bear * 1.15) direction = "BUY";
   else if (bear > bull * 1.15) direction = "SELL";
 
@@ -234,16 +192,14 @@ function technicalEngine(body) {
 
 function riskEngine(body, candle, technical) {
   const latest = body?.ind?.latest || {};
-
-  const price = num(body?.market?.price);
-  const atr = num(latest?.atr);
+  const price = num(body?.market?.price ?? latest?.price);
+  const atr = num(latest?.atr ?? body?.atr);
 
   let riskQuality = 70;
   let volatilityRisk = 30;
 
   if (price !== null && atr !== null && price > 0) {
     const atrPct = (atr / price) * 100;
-
     if (atrPct < 0.35) {
       riskQuality = 60;
       volatilityRisk = 20;
@@ -260,27 +216,13 @@ function riskEngine(body, candle, technical) {
   }
 
   let trapRisk = 20;
-
   const rsi = num(latest?.rsi);
-
-  if (rsi !== null && (rsi > 75 || rsi < 25)) {
-    trapRisk += 20;
-  }
-
-  if (candle.patterns.includes("Doji / Indecision")) {
-    trapRisk += 12;
-  }
-
-  if (technical.agreement < 60) {
-    trapRisk += 20;
-  }
-
-  if (body?.market?.volumeConfirmed === false) {
-    trapRisk += 15;
-  }
+  if (rsi !== null && (rsi > 75 || rsi < 25)) trapRisk += 20;
+  if (candle.patterns.includes("Doji / Indecision")) trapRisk += 12;
+  if (technical.agreement < 60) trapRisk += 20;
+  if (body?.market?.volumeConfirmed === false) trapRisk += 15;
 
   trapRisk = clamp(trapRisk);
-
   const candleConfirmation = candle.score;
 
   const setupQuality = clamp(
@@ -300,28 +242,14 @@ function riskEngine(body, candle, technical) {
 
 export async function POST(req) {
   try {
-    // ---------------------------------------
-    // API KEY
-    // ---------------------------------------
-
-    const apiKey = process.env.GROQ_API_KEY;
-
-    if (!apiKey) {
+    if (!process.env.GROQ_API_KEY) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "GROQ_API_KEY is missing in .env.local",
-        },
+        { success: false, error: "GROQ_API_KEY is missing in .env.local" },
         { status: 500 },
       );
     }
 
-    // ---------------------------------------
-    // REQUEST
-    // ---------------------------------------
-
     const body = await req.json().catch(() => ({}));
-
     const {
       symbol = "UNKNOWN",
       score = 0,
@@ -330,35 +258,15 @@ export async function POST(req) {
       candles = [],
       market = {},
       previousSignal = null,
+      timeframe = "5",
     } = body;
 
-    // ---------------------------------------
-    // LOCAL DETERMINISTIC ENGINES
-    // ---------------------------------------
-
+    // 1. Run deterministic engines
     const candle = candleAnalysis(candles);
-
-    const technical = technicalEngine({
-      score,
-      ind,
-      market,
-    });
-
-    const risk = riskEngine(
-      {
-        ...body,
-        candles,
-      },
-      candle,
-      technical,
-    );
-
-    // ---------------------------------------
-    // PRELIMINARY CALL
-    // ---------------------------------------
+    const technical = technicalEngine({ score, ind, market });
+    const risk = riskEngine({ ...body, candles }, candle, technical);
 
     let preliminaryCall = "HOLD";
-
     if (
       technical.direction === "BUY" &&
       risk.setupQuality >= 72 &&
@@ -366,7 +274,6 @@ export async function POST(req) {
     ) {
       preliminaryCall = "BUY";
     }
-
     if (
       technical.direction === "SELL" &&
       risk.setupQuality >= 72 &&
@@ -374,330 +281,87 @@ export async function POST(req) {
     ) {
       preliminaryCall = "SELL";
     }
-
     if (risk.setupQuality < 55) {
       preliminaryCall = "NO TRADE";
     }
 
-    // ---------------------------------------
-    // CANDLE DATA FOR AI
-    // ---------------------------------------
-
-    const candleText = Array.isArray(candles)
-      ? candles
-          .slice(-10)
-          .map(
-            (c, i) =>
-              `${i + 1}. O:${c.open} H:${c.high} L:${c.low} C:${c.close} V:${c.volume ?? "N/A"}`,
-          )
-          .join("\n")
-      : "No candle data supplied.";
-
-    // ---------------------------------------
-    // AI PROMPT
-    // ---------------------------------------
+    const candleText =
+      Array.isArray(candles) && candles.length > 0
+        ? candles
+            .slice(-8)
+            .map(
+              (c, i) =>
+                `${i + 1}. O:${c.open} H:${c.high} L:${c.low} C:${c.close} V:${c.volume ?? 0}`,
+            )
+            .join("\n")
+        : "No candles available";
 
     const prompt = `
-You are an institutional NSE intraday market-structure analyst.
+You are an institutional NSE intraday market-structure validator. Validate or veto this setup.
 
-Your job is NOT to blindly agree with the composite score.
+Symbol: ${symbol} | TF: ${timeframe}M | Price: ₹${market?.price ?? ind?.latest?.price ?? "N/A"}
+Composite Score: ${score}/100 | Setup Side: ${technical.direction}
+VWAP: ₹${ind?.latest?.vwap ?? "N/A"} | RSI: ${ind?.latest?.rsi ?? "N/A"}
+EMA 9: ${ind?.latest?.ema9 ?? "N/A"} | EMA 21: ${ind?.latest?.ema21 ?? "N/A"}
+CPR: ${ind?.cprState ?? "N/A"} | ORB: ${ind?.orbState ?? "N/A"}
+Detected Pattern: ${pattern?.name || candle.patterns.join(", ") || "None"}
 
-Validate or reject the setup using:
-- Price vs VWAP
-- EMA 9/21 structure
-- RSI
-- MACD
-- CPR
-- ORB
-- ATR
-- Volume
-- Last 10 candles
-- Candle pattern
-- Indicator agreement
-- Trap risk
-- Risk/reward
+Preliminary Call: ${preliminaryCall}
+Technical Agreement: ${technical.agreement}% | Risk Quality: ${risk.riskQuality}% | Trap Risk: ${risk.trapRisk}%
 
-IMPORTANT:
-The percentage values are SETUP CONFIDENCE scores.
-They are NOT guaranteed probabilities of profit.
-
-If signals conflict, prefer HOLD / NO TRADE.
-
-========================
-MARKET
-========================
-
-Symbol: ${symbol}
-Price: ₹${market?.price ?? "N/A"}
-Previous Signal: ${previousSignal || "None"}
-
-Composite Bias Score:
-${score}/100
-
-========================
-INDICATORS
-========================
-
-VWAP: ₹${ind?.latest?.vwap ?? "N/A"}
-RSI: ${ind?.latest?.rsi ?? "N/A"}
-
-EMA 9:
-${ind?.latest?.ema9 ?? "N/A"}
-
-EMA 21:
-${ind?.latest?.ema21 ?? "N/A"}
-
-MACD:
-${ind?.latest?.macd ?? "N/A"}
-
-MACD Signal:
-${ind?.latest?.macdSignal ?? "N/A"}
-
-ATR(14):
-${ind?.latest?.atr ?? "N/A"}
-
-CPR:
-${ind?.cprState ?? "N/A"}
-
-ORB:
-${ind?.orbState ?? "N/A"}
-
-Volume:
-${market?.volume ?? "N/A"}
-
-Relative Volume:
-${market?.relativeVolume ?? "N/A"}
-
-Volume Confirmation:
-${market?.volumeConfirmed ?? "N/A"}
-
-========================
-CANDLE ENGINE
-========================
-
-Detected Pattern:
-${pattern?.name || "None"}
-
-Pattern Type:
-${pattern?.type || "N/A"}
-
-Local Candle Direction:
-${candle.direction}
-
-Local Candle Confirmation:
-${candle.score}%
-
-Detected Candle Structures:
-${candle.patterns.join(", ") || "None"}
-
-========================
-LAST 10 CANDLES
-========================
-
+Recent Candles:
 ${candleText}
 
-========================
-LOCAL ENGINE
-========================
+Return your response strictly as valid, raw JSON with this exact structure:
+{
+  "recommendation": "BUY" | "SELL" | "HOLD" | "NO TRADE",
+  "confidenceScore": number (0-100),
+  "timeframeValidity": "string (e.g. Next 1-2 candles (5-10m))",
+  "biasReason": "string (max 18 words explaining technical root cause)",
+  "tradePlan": {
+    "idealEntry": number,
+    "target": number,
+    "stopLoss": number,
+    "riskRewardRatio": "string"
+  },
+  "riskWarning": "string (max 14 words detailing trap/invalidation)",
+  "detailedAnalysis": "string (3-4 sentences on market structure and wick behavior)"
+}`;
 
-Technical Direction:
-${technical.direction}
-
-Bullish Component Score:
-${technical.bullishScore}
-
-Bearish Component Score:
-${technical.bearishScore}
-
-Indicator Agreement:
-${technical.agreement}%
-
-Risk Quality:
-${risk.riskQuality}%
-
-Volatility Risk:
-${risk.volatilityRisk}%
-
-Trap Risk:
-${risk.trapRisk}%
-
-Setup Quality:
-${risk.setupQuality}%
-
-Preliminary Call:
-${preliminaryCall}
-
-========================
-YOUR TASK
-========================
-
-Perform an independent institutional validation.
-
-Look especially for:
-
-1. False breakout
-2. False breakdown
-3. VWAP rejection
-4. VWAP reclaim
-5. EMA trend continuation
-6. RSI exhaustion
-7. MACD momentum confirmation
-8. ORB failure
-9. CPR rejection/support
-10. Strong/weak candle follow-through
-11. Volume confirmation
-12. Retail chasing
-13. Liquidity sweep
-14. Mean-reversion conditions
-
-Do not force a trade.
-
-Return ONLY this structure:
-
-FINAL CALL: BUY / SELL / HOLD / NO TRADE
-
-CALL CONFIDENCE: XX%
-
-CANDLE CONFIRMATION: XX%
-
-INDICATOR AGREEMENT: XX%
-
-TRAP RISK: XX%
-
-RISK QUALITY: XX%
-
-SETUP QUALITY: XX%
-
-MARKET REGIME: TRENDING / RANGE / BREAKOUT / BREAKDOWN / HIGH VOLATILITY / UNCLEAR
-
-ENTRY ZONE:
-Give a realistic price zone.
-
-HARD SL:
-Give the structural invalidation price.
-
-TARGET 1:
-Give first target.
-
-TARGET 2:
-Give second target only if justified.
-
-BREAKEVEN:
-Explain when SL should move to entry.
-
-WHY:
-Give exactly 5 concise reasons.
-
-CANDLE VERDICT:
-Analyze the latest 2-3 candles.
-
-TRAP:
-State the most likely retail trap.
-
-NO-TRADE CONDITION:
-Give the exact condition that invalidates the setup.
-
-EXECUTION:
-One sentence describing exactly what the trader should wait for.
-
-RULES:
-- Never guarantee profit.
-- Never call a weak setup strong.
-- Do not recommend BUY/SELL when indicators materially conflict.
-- If confidence is below 65%, prefer HOLD.
-- If trap risk is above 60%, prefer NO TRADE.
-- If candle confirmation is below 55%, avoid aggressive entry.
-- If volume does not confirm breakout, treat breakout as suspicious.
-- Prefer confirmation over prediction.
-`;
-
-    // ---------------------------------------
-    // GROQ REQUEST
-    // ---------------------------------------
-
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+    const completion = await groq.chat.completions.create({
+      model: MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a strict institutional quantitative intraday analyst for NSE. Always respond in valid JSON format only.",
         },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.15,
+      response_format: { type: "json_object" },
+    });
 
-        body: JSON.stringify({
-          model: MODEL,
-
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a strict institutional NSE intraday market-structure validator. Reject low-quality setups instead of forcing trades.",
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-
-          temperature: 0.15,
-
-          max_tokens: 700,
-
-          // Helps reduce unnecessary randomness.
-          top_p: 0.85,
-        }),
-      },
+    const parsedData = JSON.parse(
+      completion.choices[0]?.message?.content || "{}",
     );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error?.message ||
-          `Groq API Error: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const aiVerdict = data?.choices?.[0]?.message?.content?.trim();
-
-    if (!aiVerdict) {
-      throw new Error("Groq returned an empty analysis.");
-    }
-
-    // ---------------------------------------
-    // RESPONSE
-    // ---------------------------------------
 
     return NextResponse.json({
       success: true,
-
+      data: parsedData,
       engine: {
         preliminaryCall,
-
         technicalDirection: technical.direction,
-
         technicalConfidence: technical.agreement,
-
         candleDirection: candle.direction,
-
         candleConfirmation: candle.score,
-
         indicatorAgreement: technical.agreement,
-
         trapRisk: risk.trapRisk,
-
         riskQuality: risk.riskQuality,
-
         volatilityRisk: risk.volatilityRisk,
-
         setupQuality: risk.setupQuality,
-
         candlePatterns: candle.patterns,
       },
-
-      analysis: aiVerdict,
-
       meta: {
         model: MODEL,
         candlesAnalyzed: Math.min(
@@ -709,7 +373,6 @@ RULES:
     });
   } catch (error) {
     console.error("AI Analyst Error:", error?.message || error);
-
     return NextResponse.json(
       {
         success: false,

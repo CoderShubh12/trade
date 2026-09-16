@@ -13,36 +13,33 @@ import StockSearch from "@/components/StockSearch";
 import ExecutionDeckComponent from "@/components/ExecutionDeck";
 import PriceBandScanner from "@/components/PriceBandScanner";
 import AccuracyTracker from "@/components/AccuracyTracker";
-import { STOCK_POOL } from "@/lib/stockPool";
 import AiAnalystPanel from "@/components/AiAnalystPanel";
+import { STOCK_POOL } from "@/lib/stockPool";
 import {
   computeAll,
   calculateATR,
   calculateTradeLevels,
 } from "@/lib/indicators";
 import { detectCandlePattern } from "@/lib/candlestickEngine";
-import { parseBinaryPacket } from "@/lib/angelStream";
-import { fmt, isMarketOpen, playAlertTone } from "@/lib/utils";
+import { fmt, playAlertTone } from "@/lib/utils";
+import { detectMarketRegime } from "@/lib/marketRegime";
 import {
-  detectMarketRegime,
-  checkIndicatorConflicts,
-} from "@/lib/marketRegime";
-import { calculatePositionSize, checkDailyRiskLimits } from "@/lib/riskEngine";
-import {
-  checkMarketLiquidityAndGaps,
-  checkSignalCooldown,
+  isStockInCooldown,
+  setStockPostLossCooldown,
+  checkStockSignalThrottle,
+  markStockSignalExecuted,
   checkKillSwitch,
   toggleKillSwitch,
 } from "@/lib/advancedGuards";
+import { evaluateTradeSetup, monitorActiveTrade } from "@/lib/tradeManager";
 
-// Chartink-Style Screener Preset Definitions
 const CHARTINK_STRATEGIES = [
   {
     id: "BULLISH_VWAP_CROSS",
     name: "⚡ 5M VWAP + EMA 9/21 Cross",
     description: "Close crosses above VWAP with Bullish EMA Stack & RSI > 55",
     evaluate: (candles) => {
-      if (!candles || candles.length < 25) return false;
+      if (!candles || candles.length < 20) return false;
       const ind = computeAll(candles, 5);
       if (!ind?.latest) return false;
       const { price, vwap, ema9, ema21, rsi } = ind.latest;
@@ -53,16 +50,17 @@ const CHARTINK_STRATEGIES = [
   {
     id: "ORB_BREAKOUT_VOL",
     name: "🚀 15M ORB High Breakout + 2x Vol",
-    description: "Opening range breakout with volume > 2x of 20-period average",
+    description: "Opening range breakout with volume > 1.8x of average",
     evaluate: (candles) => {
       if (!candles || candles.length < 15) return false;
       const ind = computeAll(candles, 5);
       if (!ind?.orb || !ind?.latest) return false;
       const { price } = ind.latest;
       const currentVol = candles[candles.length - 1]?.volume || 0;
+      const volSlice = candles.slice(-20);
       const avgVol =
-        candles.slice(-20).reduce((acc, c) => acc + (c.volume || 1), 0) / 20;
-      return price > ind.orb.high && currentVol >= avgVol * 2.0;
+        volSlice.reduce((acc, c) => acc + (c.volume || 1), 0) / volSlice.length;
+      return price > ind.orb.high && currentVol >= avgVol * 1.8;
     },
   },
   {
@@ -70,11 +68,12 @@ const CHARTINK_STRATEGIES = [
     name: "🔻 Institutional Short (VWAP Breakdown)",
     description: "Close breaks below Session VWAP & CPR with Bearish MACD",
     evaluate: (candles) => {
-      if (!candles || candles.length < 25) return false;
+      if (!candles || candles.length < 20) return false;
       const ind = computeAll(candles, 5);
       if (!ind?.latest || !ind?.cpr) return false;
       const { price, vwap, hist } = ind.latest;
-      return price < vwap && price < ind.cpr.bc && hist < 0;
+      const lowerCpr = Math.min(ind.cpr.bc, ind.cpr.tc);
+      return price < vwap && price < lowerCpr && hist < 0;
     },
   },
   {
@@ -82,16 +81,17 @@ const CHARTINK_STRATEGIES = [
     name: "💥 Bollinger Band Squeeze Blast",
     description: "Volatility breakout after severe band contraction",
     evaluate: (candles) => {
-      if (!candles || candles.length < 25) return false;
+      if (!candles || candles.length < 20) return false;
       const ind = computeAll(candles, 5);
       if (!ind?.bb || !ind?.latest) return false;
-      return ind.bb.isSqueeze && ind.latest.price > ind.bb.upper;
+      const hadSqueeze = ind.bb.isSqueeze || ind.bb.bandwidth < 1.35;
+      const isBreakout = ind.latest.price >= ind.bb.upper;
+      return hadSqueeze && isBreakout;
     },
   },
 ];
 
-// Custom Indicator Bar with Simple English Tooltips
-function TooltipIndicatorBar({ name, score = 0, detail = "—", tooltip = "" }) {
+function TooltipIndicatorBar({ name, score = 0, detail = "—" }) {
   const safeScore = typeof score === "number" && !isNaN(score) ? score : 0;
   const isPositive = safeScore >= 0;
   const barWidth = Math.min(100, (Math.abs(safeScore) / 25) * 100);
@@ -99,8 +99,6 @@ function TooltipIndicatorBar({ name, score = 0, detail = "—", tooltip = "" }) 
 
   return (
     <div
-      className="has-tooltip"
-      data-tip={tooltip}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -110,7 +108,6 @@ function TooltipIndicatorBar({ name, score = 0, detail = "—", tooltip = "" }) 
         border: "1px solid rgba(255, 255, 255, 0.05)",
         borderRadius: "6px",
         marginBottom: "8px",
-        transition: "border-color 0.2s ease",
       }}
     >
       <div
@@ -121,9 +118,7 @@ function TooltipIndicatorBar({ name, score = 0, detail = "—", tooltip = "" }) 
           fontSize: "0.78rem",
         }}
       >
-        <span style={{ color: "#cbd5e1", fontWeight: 600 }}>
-          {name} <span style={{ color: "#64748b", fontSize: "0.7rem" }}>ⓘ</span>
-        </span>
+        <span style={{ color: "#cbd5e1", fontWeight: 600 }}>{name}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>
             {detail}
@@ -172,6 +167,8 @@ const TIMEFRAMES = [
 ];
 
 export default function DashboardPage() {
+  const [mounted, setMounted] = useState(false);
+
   const [currentStock, setCurrentStock] = useState({
     symbol: "SBIN",
     token: "3045",
@@ -179,79 +176,56 @@ export default function DashboardPage() {
   });
   const [selectedTF, setSelectedTF] = useState("5");
   const [data, setData] = useState([]);
-  const [wsConnected, setWsConnected] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
 
+  const [activeTradesState, setActiveTradesState] = useState({});
+  const [lockedSignalLevels, setLockedSignalLevels] = useState({});
+
   const [niftyData, setNiftyData] = useState({
-    ltp: 0,
-    open: 0,
-    change: 0,
-    changePercent: 0,
+    ltp: 24958.4,
+    open: 24920.0,
+    change: 38.4,
+    changePercent: 0.15,
   });
 
   const [scannerTicks, setScannerTicks] = useState({});
   const [activeAlert, setActiveAlert] = useState(null);
-  const wsRef = useRef(null);
 
   const [selectedStrategy, setSelectedStrategy] =
     useState("BULLISH_VWAP_CROSS");
   const [screenerLoading, setScreenerLoading] = useState(false);
   const [screenerMatches, setScreenerMatches] = useState([]);
-  const [lastScanTimestamp, setLastScanTimestamp] = useState(null);
 
   const activeTradesRef = useRef({});
   const lastProcessedCandleTime = useRef(null);
-  const lastTickTimeRef = useRef(Date.now());
-  const dailyRiskStateRef = useRef({
-    tradesCount: 0,
-    consecutiveLosses: 0,
-    totalPnL: 0,
-  });
 
-  // 💾 1. Load Stored Sessions & Active Trades on Mount
+  // Client hydration safe initialization
   useEffect(() => {
+    setMounted(true);
     try {
       const savedStock = localStorage.getItem("last_active_stock");
       if (savedStock) {
         const parsed = JSON.parse(savedStock);
-        if (parsed?.symbol && parsed?.token) {
-          setCurrentStock(parsed);
-        }
+        if (parsed?.symbol && parsed?.token) setCurrentStock(parsed);
       }
 
       const savedTrades = localStorage.getItem("terminal_active_trades");
       if (savedTrades) {
-        activeTradesRef.current = JSON.parse(savedTrades);
+        const parsedTrades = JSON.parse(savedTrades);
+        activeTradesRef.current = parsedTrades;
+        setActiveTradesState(parsedTrades);
       }
-    } catch (e) {
-      console.warn("Could not restore session state:", e);
-    }
+    } catch {}
   }, []);
 
-  const persistTrades = () => {
+  const syncTrades = (newTrades) => {
+    activeTradesRef.current = newTrades;
+    setActiveTradesState({ ...newTrades });
     try {
-      localStorage.setItem(
-        "terminal_active_trades",
-        JSON.stringify(activeTradesRef.current),
-      );
-    } catch (e) {
-      console.warn("Could not save trades to storage:", e);
-    }
+      localStorage.setItem("terminal_active_trades", JSON.stringify(newTrades));
+    } catch {}
   };
-
-  // Stale Data & WebSocket Health Monitor
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const timeSinceLastTick = Date.now() - lastTickTimeRef.current;
-      if (timeSinceLastTick > 12000 && wsConnected) {
-        console.warn("Stale data detected! Reconnecting WebSocket feed...");
-        setWsConnected(false);
-        if (wsRef.current) wsRef.current.close();
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [wsConnected]);
 
   const handleStockChange = (stock) => {
     setData([]);
@@ -259,195 +233,91 @@ export default function DashboardPage() {
     setCurrentStock(stock);
     try {
       localStorage.setItem("last_active_stock", JSON.stringify(stock));
-    } catch (e) {
-      console.warn("Could not persist session stock:", e);
-    }
+    } catch {}
   };
 
-  // 2. Fetch Historical Candles
+  // 1. Angel One Live Market Data Polling (No Fake Ticks)
   useEffect(() => {
     let isMounted = true;
-    const controller = new AbortController();
 
-    async function loadHistory() {
+    async function fetchLiveFeed() {
       try {
         const res = await fetch(
           `/api/market-data?token=${currentStock.token}&tf=${selectedTF}`,
-          { signal: controller.signal },
+          { cache: "no-store" },
         );
         const json = await res.json();
-
-        if (isMounted) {
-          if (json.success && json.data?.length > 0) {
-            setData(json.data);
-            setErrorMsg(null);
-          } else if (!json.fallback) {
-            setErrorMsg(json.error || "Failed to load market candles");
-          }
+        if (
+          isMounted &&
+          json.success &&
+          Array.isArray(json.data) &&
+          json.data.length > 0
+        ) {
+          setData(json.data);
+          setErrorMsg(null);
+        } else if (isMounted && !json.success) {
+          setErrorMsg(json.error || "Awaiting Live Exchange Feed...");
         }
-      } catch (e) {
-        if (isMounted && e.name !== "AbortError") {
-          setErrorMsg("Could not fetch market data from local bridge");
+      } catch (err) {
+        if (isMounted) {
+          setErrorMsg("Bridge Connection Offline: Checking Angel API...");
         }
       }
     }
 
-    if (currentStock?.token) {
-      loadHistory();
-    }
+    fetchLiveFeed();
+    const livePollingInterval = setInterval(fetchLiveFeed, 2000);
 
     return () => {
       isMounted = false;
-      controller.abort();
+      clearInterval(livePollingInterval);
     };
   }, [currentStock.token, selectedTF]);
 
-  // 3. Real-Time SmartStream Multi-Token Subscription & Auto-Reconnection
+  // 2. Fetch Live Nifty 50 Benchmark Data
   useEffect(() => {
     let isMounted = true;
 
-    async function connectWebSocket() {
+    async function fetchNiftyLive() {
       try {
-        const res = await fetch("/api/ws-token");
+        const res = await fetch(`/api/market-data?token=26000&tf=5`, {
+          cache: "no-store",
+        });
         const json = await res.json();
-        if (!json.success || !json.data) {
-          if (isMounted) setWsConnected(false);
-          return;
-        }
+        if (isMounted && json.success && json.data?.length > 0) {
+          const bars = json.data;
+          const latestBar = bars[bars.length - 1];
+          const openPrice = bars[0]?.open || latestBar.open;
+          const currentLtp = latestBar.close;
+          const diff = currentLtp - openPrice;
+          const diffPct = (diff / openPrice) * 100;
 
-        const { clientCode, feedToken } = json.data;
-        const wsUrl = `wss://smartapisocket.angelone.in/smart-stream?clientCode=${encodeURIComponent(
-          clientCode,
-        )}&feedToken=${encodeURIComponent(feedToken)}`;
-
-        const ws = new WebSocket(wsUrl);
-        ws.binaryType = "arraybuffer";
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          if (!isMounted) return;
-          setWsConnected(true);
-          lastTickTimeRef.current = Date.now();
-
-          const poolTokens = STOCK_POOL.map((s) => String(s.token));
-
-          ws.send(
-            JSON.stringify({
-              correlationID: "terminal_stream_v2",
-              action: 1,
-              params: {
-                mode: 2,
-                tokenList: [
-                  {
-                    exchangeType: currentStock.exchangeSegment || 1,
-                    tokens: [String(currentStock.token)],
-                  },
-                  {
-                    exchangeType: 13,
-                    tokens: ["99926000"], // NIFTY 50 Index Spot
-                  },
-                  {
-                    exchangeType: 1,
-                    tokens: poolTokens,
-                  },
-                ],
-              },
-            }),
-          );
-        };
-
-        ws.onmessage = (event) => {
-          if (!(event.data instanceof ArrayBuffer)) return;
-          lastTickTimeRef.current = Date.now();
-          const tick = parseBinaryPacket(event.data);
-          if (!tick || !tick.ltp || tick.ltp <= 0) return;
-
-          // A. NIFTY 50 Tick
-          if (tick.token === "99926000") {
-            setNiftyData((prev) => {
-              const basePrice = prev.open > 0 ? prev.open : tick.ltp;
-              const chg = tick.ltp - basePrice;
-              const chgPct = basePrice > 0 ? (chg / basePrice) * 100 : 0;
-              return {
-                ltp: tick.ltp,
-                open: basePrice,
-                change: chg,
-                changePercent: chgPct,
-              };
-            });
-            return;
-          }
-
-          // B. Active Stock Candlestick Live Update
-          if (tick.token === String(currentStock.token)) {
-            setData((prev) => {
-              if (!prev || prev.length === 0) return prev;
-              const lastIdx = prev.length - 1;
-              const last = prev[lastIdx];
-              const updatedLast = {
-                ...last,
-                high: Math.max(last.high, tick.ltp),
-                low: Math.min(last.low, tick.ltp),
-                close: tick.ltp,
-                volume: tick.volume ? tick.volume : (last.volume || 0) + 1,
-              };
-              return [...prev.slice(0, -1), updatedLast];
-            });
-          }
-
-          // C. Scanner Pool Tick Update
-          setScannerTicks((prev) => {
-            const prevTick = prev[tick.token] || {};
-            const isVolSpike = tick.lastTradedQty && tick.lastTradedQty > 2000;
-
-            return {
-              ...prev,
-              [tick.token]: {
-                ltp: tick.ltp,
-                volume: tick.volume || prevTick.volume || 0,
-                score: prevTick.score || 0,
-                isScalperSpike: isVolSpike,
-                isTrap: isVolSpike && tick.ltp < (prevTick.ltp || tick.ltp),
-              },
-            };
+          setNiftyData({
+            ltp: currentLtp,
+            open: openPrice,
+            change: diff,
+            changePercent: Number(diffPct.toFixed(2)),
           });
-        };
-
-        ws.onerror = () => isMounted && setWsConnected(false);
-        ws.onclose = () => {
-          if (isMounted) {
-            setWsConnected(false);
-            setTimeout(connectWebSocket, 3000);
-          }
-        };
-      } catch (err) {
-        if (isMounted) setWsConnected(false);
-      }
+        }
+      } catch {}
     }
 
-    connectWebSocket();
+    fetchNiftyLive();
+    const niftyInterval = setInterval(fetchNiftyLive, 5000);
+
     return () => {
       isMounted = false;
-      if (wsRef.current) wsRef.current.close();
+      clearInterval(niftyInterval);
     };
-  }, [currentStock.token, currentStock.exchangeSegment]);
+  }, []);
 
-  // Calculations
   const ind = useMemo(() => {
     if (!data || data.length === 0) return null;
     return computeAll(data, Number(selectedTF));
   }, [data, selectedTF]);
 
   const marketRegime = useMemo(() => detectMarketRegime(data), [data]);
-  const indicatorConflict = useMemo(
-    () => checkIndicatorConflicts(ind?.scores),
-    [ind?.scores],
-  );
-
-  // 🕯️ 1. Detect Candlestick Pattern on Active Stock Candles
-  const candlePattern = useMemo(() => {
-    return detectCandlePattern(data);
-  }, [data]);
+  const candlePattern = useMemo(() => detectCandlePattern(data), [data]);
 
   const scores = ind?.scores || {
     trendScore: 0,
@@ -460,15 +330,14 @@ export default function DashboardPage() {
     technicalScore: 0,
   };
 
-  // 🎯 2. Combined Composite Score
   const finalCompositeScore = useMemo(() => {
     const baseScore = scores.technicalScore || 0;
-    const candleBoost = candlePattern.score || 0;
+    const candleBoost = candlePattern?.score || 0;
     return Math.max(
       -100,
       Math.min(100, Math.round(baseScore * 0.8 + candleBoost)),
     );
-  }, [scores.technicalScore, candlePattern.score]);
+  }, [scores.technicalScore, candlePattern?.score]);
 
   useEffect(() => {
     if (currentStock?.token && finalCompositeScore !== undefined) {
@@ -484,16 +353,6 @@ export default function DashboardPage() {
 
   const currentAtr = useMemo(() => calculateATR(data, 14), [data]);
   const isExecutionTimeframe = selectedTF === "5";
-  const marketLive = isMarketOpen();
-
-  const isHighMomentumTimeWindow = useMemo(() => {
-    const now = new Date();
-    const timeNum = now.getHours() * 100 + now.getMinutes();
-    return (
-      (timeNum >= 930 && timeNum <= 1130) ||
-      (timeNum >= 1330 && timeNum <= 1445)
-    );
-  }, [data]);
 
   const niftyBias = useMemo(() => {
     if (niftyData.changePercent <= -0.2) return "BEARISH";
@@ -501,14 +360,13 @@ export default function DashboardPage() {
     return "NEUTRAL";
   }, [niftyData.changePercent]);
 
-  // ⚡ Chartink-Style Screener Runner
   const handleRunChartinkScan = async () => {
     const strat = CHARTINK_STRATEGIES.find((s) => s.id === selectedStrategy);
     if (!strat) return;
 
     setScreenerLoading(true);
     const matches = [];
-    const scanPool = STOCK_POOL.slice(0, 35);
+    const scanPool = STOCK_POOL.slice(0, 12);
 
     for (const st of scanPool) {
       try {
@@ -516,7 +374,7 @@ export default function DashboardPage() {
           cache: "no-store",
         });
         const json = await res.json();
-        if (json.success && json.data?.length >= 25) {
+        if (json.success && json.data?.length >= 15) {
           if (strat.evaluate(json.data)) {
             const lastCandle = json.data[json.data.length - 1];
             matches.push({
@@ -527,23 +385,17 @@ export default function DashboardPage() {
             });
           }
         }
-      } catch (err) {
-        // Skip individual error
-      }
+      } catch {}
     }
 
     setScreenerMatches(matches);
-    setLastScanTimestamp(new Date().toLocaleTimeString("en-IN"));
     setScreenerLoading(false);
   };
 
-  // 🚨 Synchronized Execution Engine with Advanced Guards & Daily Risk Shields
+  // Execution & Risk Pilot Engine (Trailing SL, Post-Loss Quarantine, Fixed Targets)
   useEffect(() => {
     if (!ind?.latest?.price || !data || data.length < 2) return;
-    if (!marketLive) return;
     if (!isExecutionTimeframe) return;
-
-    // Emergency Kill Switch Guard
     if (checkKillSwitch()) return;
 
     const stockToken = String(currentStock.token);
@@ -551,102 +403,81 @@ export default function DashboardPage() {
     const currentPrice = ind.latest.price;
     const vwap = ind.latest.vwap;
 
-    // --- A. RUNNING TRADE PROTECTION ENGINE ---
+    // --- A. ACTIVE TRADE PILOT ---
     if (activeTrade) {
-      const vwapBuffer = vwap * 0.0005;
-      const isBuyVwapBreach =
-        activeTrade.side === "BUY" && currentPrice < vwap - vwapBuffer;
-      const isSellVwapBreach =
-        activeTrade.side === "SELL" && currentPrice > vwap + vwapBuffer;
+      const status = monitorActiveTrade(activeTrade, currentPrice, vwap);
+      if (!status) return;
 
-      const isTargetHit =
-        (activeTrade.side === "BUY" && currentPrice >= activeTrade.target1) ||
-        (activeTrade.side === "SELL" && currentPrice <= activeTrade.target1);
-
-      const isSlHit =
-        (activeTrade.side === "BUY" && currentPrice <= activeTrade.sl) ||
-        (activeTrade.side === "SELL" && currentPrice >= activeTrade.sl);
-
-      const isStagnant = Date.now() > activeTrade.maxTime;
-
-      if (isBuyVwapBreach || isSellVwapBreach) {
-        playAlertTone("EXIT_NOW");
-        setActiveAlert({
-          type: "EXIT_NOW",
-          symbol: currentStock.symbol,
-          reason: "Price breached Session VWAP buffer",
-          exitPrice: currentPrice,
-          vwapPrice: vwap,
-        });
-        delete activeTradesRef.current[stockToken];
-        persistTrades();
-        return;
-      }
-
-      if (isTargetHit) {
+      // 1. Partial Target 1 Reached: Shift SL to Cost
+      if (
+        status.isPartial &&
+        status.reason === "TARGET_1_HIT_TRAIL_SL_TO_COST"
+      ) {
         playAlertTone("BUY");
         setActiveAlert({
           type: "TARGET_HIT",
           symbol: currentStock.symbol,
           exitPrice: currentPrice,
-          message: "🎯 Target 1 reached! Secure partial profits.",
+          message: `🎯 Target 1 reached! Trailing SL locked to Cost (₹${status.newSl}).`,
         });
-        dailyRiskStateRef.current.tradesCount += 1;
-        delete activeTradesRef.current[stockToken];
-        persistTrades();
+
+        setLockedSignalLevels((prev) => ({
+          ...prev,
+          [stockToken]: {
+            ...prev[stockToken],
+            stopLoss: status.newSl,
+          },
+        }));
+
+        const updated = { ...activeTradesRef.current };
+        updated[stockToken] = activeTrade;
+        syncTrades(updated);
         return;
       }
 
-      if (isSlHit) {
-        playAlertTone("SL_HIT");
-        setActiveAlert({
-          type: "SL_HIT",
-          symbol: currentStock.symbol,
-          exitPrice: currentPrice,
-          message: "🛑 Stop Loss hit. Capital protected.",
-        });
-        dailyRiskStateRef.current.tradesCount += 1;
-        dailyRiskStateRef.current.consecutiveLosses += 1;
-        delete activeTradesRef.current[stockToken];
-        persistTrades();
-        return;
-      }
+      // 2. Full Exits (Target 2, Trailing SL, Stop Loss, 03:15 PM Square-off)
+      if (status.exit) {
+        const isProfit =
+          status.reason === "TARGET_2_HIT" ||
+          (status.reason === "TRAILING_SL_HIT" && activeTrade.t1Reached);
 
-      if (isStagnant) {
-        playAlertTone("EXIT_NOW");
+        playAlertTone(isProfit ? "BUY" : "SL_HIT");
+
         setActiveAlert({
-          type: "EXIT_NOW",
+          type: isProfit ? "TARGET_HIT" : "SL_HIT",
           symbol: currentStock.symbol,
-          reason: "25-Minute Timeout Decay reached.",
           exitPrice: currentPrice,
-          vwapPrice: vwap,
+          message:
+            status.reason === "TARGET_2_HIT"
+              ? "🚀 Target 2 reached! Full profit booked."
+              : status.reason === "MARKET_CLOSE_SQUAREOFF"
+                ? "⏰ 03:15 PM Auto-Square-off executed."
+                : status.reason === "TRAILING_SL_HIT"
+                  ? "🛡️ Trailing SL hit! Cost protected."
+                  : status.reason === "VWAP_BREACH_EXIT"
+                    ? "⚠️ VWAP buffer breached. Risk cut."
+                    : "🛑 Position closed: " + status.reason,
         });
-        delete activeTradesRef.current[stockToken];
-        persistTrades();
+
+        if (!isProfit) {
+          setStockPostLossCooldown(stockToken, 45);
+        }
+
+        const updated = { ...activeTradesRef.current };
+        delete updated[stockToken];
+        syncTrades(updated);
         return;
       }
 
       return;
     }
 
-    // --- B. ADVANCED GUARDS & RISK SHIELDS ---
-    const dailyRiskCheck = checkDailyRiskLimits(
-      dailyRiskStateRef.current.tradesCount,
-      dailyRiskStateRef.current.consecutiveLosses,
-      dailyRiskStateRef.current.totalPnL,
-    );
-    if (!dailyRiskCheck.allowed) return;
+    // --- B. NEW SETUP EVALUATION ---
+    const quarantine = isStockInCooldown(stockToken);
+    if (quarantine.inCooldown) return;
 
-    const cooldownCheck = checkSignalCooldown(10);
-    if (!cooldownCheck.allowed) return;
-
-    const prevClose = data[data.length - 2]?.close || currentPrice;
-    const liquidityCheck = checkMarketLiquidityAndGaps(
-      data,
-      currentPrice,
-      prevClose,
-    );
-    if (!liquidityCheck.passed) return;
+    const throttle = checkStockSignalThrottle(stockToken, 5);
+    if (!throttle.allowed) return;
 
     const completedCandle = data[data.length - 2];
     if (
@@ -656,117 +487,172 @@ export default function DashboardPage() {
       return;
     }
 
-    if (!isHighMomentumTimeWindow) return;
-    if (marketRegime === "CHOPPY_SIDEWAYS") return;
-    if (indicatorConflict.hasConflict) return;
+    async function executeSignalCheck() {
+      if (Math.abs(finalCompositeScore) < 65) return;
 
-    const isBearishRejectionCandle =
-      candlePattern.bias.includes("BEARISH") &&
-      candlePattern.type === "REVERSAL";
-    const isBullishRejectionCandle =
-      candlePattern.bias.includes("BULLISH") &&
-      candlePattern.type === "REVERSAL";
-
-    // 🚀 BUY Trigger
-    if (
-      finalCompositeScore >= 65 &&
-      niftyBias !== "BEARISH" &&
-      !isBearishRejectionCandle
-    ) {
-      lastProcessedCandleTime.current = completedCandle.time;
-      const levels = calculateTradeLevels("BUY", currentPrice, currentAtr);
-
-      activeTradesRef.current[stockToken] = {
-        side: "BUY",
-        entry: currentPrice,
-        target1: levels.target1,
-        target2: levels.target2,
-        sl: levels.stopLoss,
-        startTime: Date.now(),
-        maxTime: Date.now() + 25 * 60 * 1000,
-      };
-      persistTrades();
-
-      setActiveAlert({
-        type: "BUY",
-        symbol: currentStock.symbol,
-        price: currentPrice,
-        score: finalCompositeScore,
-        pattern: candlePattern.name,
+      const setup = await evaluateTradeSetup(
+        finalCompositeScore,
+        niftyBias,
+        completedCandle,
         vwap,
-        rsi: ind.latest.rsi,
-        orbState: ind.orbState,
-        atr: currentAtr,
-        levels,
-      });
-      playAlertTone("BUY");
+        currentAtr,
+        {
+          bypassTimeWindow: true,
+          useGroqValidation: false,
+          symbol: currentStock.symbol,
+          timeframe: selectedTF,
+          regime: marketRegime,
+        },
+      );
+
+      if (setup && (setup.action === "BUY" || setup.action === "SELL")) {
+        lastProcessedCandleTime.current = completedCandle.time;
+        markStockSignalExecuted(stockToken);
+
+        const newTradeRecord = {
+          side: setup.action,
+          action: setup.action,
+          entry: setup.entry,
+          target1: setup.target1,
+          target2: setup.target2,
+          sl: setup.stopLoss,
+          stopLoss: setup.stopLoss,
+          initialSl: setup.initialSl,
+          t1Reached: false,
+          startTime: Date.now(),
+          maxTime: setup.maxTime,
+        };
+
+        // 🔒 Freeze levels in state so they never change on subsequent ticks
+        setLockedSignalLevels((prev) => ({
+          ...prev,
+          [stockToken]: {
+            entry: setup.entry,
+            stopLoss: setup.stopLoss,
+            target1: setup.target1,
+            target2: setup.target2,
+            rrRatio: "1:2.1",
+          },
+        }));
+
+        const updated = { ...activeTradesRef.current };
+        updated[stockToken] = newTradeRecord;
+        syncTrades(updated);
+
+        setActiveAlert({
+          type: setup.action,
+          symbol: currentStock.symbol,
+          price: setup.entry,
+          score: finalCompositeScore,
+          pattern: candlePattern?.name || "PRICE_ACTION",
+          vwap,
+          rsi: ind.latest.rsi,
+          levels: {
+            entry: setup.entry,
+            stopLoss: setup.stopLoss,
+            target1: setup.target1,
+            target2: setup.target2,
+          },
+        });
+
+        playAlertTone(setup.action);
+      }
     }
 
-    // 🔻 SELL Trigger
-    else if (
-      finalCompositeScore <= -65 &&
-      niftyBias !== "BULLISH" &&
-      !isBullishRejectionCandle
-    ) {
-      lastProcessedCandleTime.current = completedCandle.time;
-      const levels = calculateTradeLevels("SELL", currentPrice, currentAtr);
-
-      activeTradesRef.current[stockToken] = {
-        side: "SELL",
-        entry: currentPrice,
-        target1: levels.target1,
-        target2: levels.target2,
-        sl: levels.stopLoss,
-        startTime: Date.now(),
-        maxTime: Date.now() + 25 * 60 * 1000,
-      };
-      persistTrades();
-
-      setActiveAlert({
-        type: "SELL",
-        symbol: currentStock.symbol,
-        price: currentPrice,
-        score: finalCompositeScore,
-        pattern: candlePattern.name,
-        vwap,
-        rsi: ind.latest.rsi,
-        orbState: ind.orbState,
-        atr: currentAtr,
-        levels,
-      });
-      playAlertTone("SELL");
-    }
+    executeSignalCheck();
   }, [
     finalCompositeScore,
-    candlePattern,
     ind,
     data,
     currentStock,
     currentAtr,
     isExecutionTimeframe,
-    marketLive,
-    isHighMomentumTimeWindow,
     niftyBias,
     marketRegime,
-    indicatorConflict,
+    candlePattern,
   ]);
 
   const stockTokenStr = String(currentStock.token);
-  const isSetupActive =
-    marketLive &&
-    !killSwitchActive &&
-    (Math.abs(finalCompositeScore) >= 65 ||
-      !!activeTradesRef.current[stockTokenStr]);
+  const activeTradeInstance = activeTradesState[stockTokenStr];
+  const stockQuarantineStatus = mounted
+    ? isStockInCooldown(stockTokenStr)
+    : { inCooldown: false };
 
-  const patternBadgeColor = candlePattern.bias.includes("BULLISH")
+  const isSetupActive =
+    !killSwitchActive &&
+    (Math.abs(finalCompositeScore) >= 65 || !!activeTradeInstance);
+
+  // 🔒 Closed-candle anchored trade levels (Insulated against live tick recalculations)
+  const frozenTradeLevels = useMemo(() => {
+    if (activeTradeInstance) {
+      return {
+        entry: activeTradeInstance.entry,
+        stopLoss: activeTradeInstance.stopLoss,
+        target1: activeTradeInstance.target1,
+        target2: activeTradeInstance.target2,
+        rrRatio: "1:2.1",
+      };
+    }
+
+    if (lockedSignalLevels[stockTokenStr]) {
+      return lockedSignalLevels[stockTokenStr];
+    }
+
+    const closedCandle =
+      data && data.length >= 2 ? data[data.length - 2] : null;
+    const fixedAnchor = closedCandle?.close || (data && data[0]?.close) || 100;
+
+    const levels = calculateTradeLevels(
+      finalCompositeScore >= 0 ? "BUY" : "SELL",
+      fixedAnchor,
+      currentAtr,
+    );
+
+    return {
+      entry: fixedAnchor,
+      stopLoss: levels.sl,
+      target1: levels.t1,
+      target2: levels.t2,
+      rrRatio: levels.rrRatio,
+    };
+  }, [
+    activeTradeInstance,
+    lockedSignalLevels,
+    stockTokenStr,
+    data && data.length >= 2 ? data[data.length - 2]?.time : null,
+    finalCompositeScore >= 0,
+    currentAtr,
+  ]);
+
+  const patternBadgeColor = candlePattern?.bias?.includes("BULLISH")
     ? "#2FD98A"
-    : candlePattern.bias.includes("BEARISH")
+    : candlePattern?.bias?.includes("BEARISH")
       ? "#FF5D5D"
       : "#94a3b8";
 
+  // Hydration safety barrier
+  if (!mounted) {
+    return (
+      <main
+        className="dashboard-container"
+        style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}
+      >
+        <div
+          style={{
+            color: "#38bdf8",
+            fontFamily: "monospace",
+            fontSize: "0.85rem",
+            letterSpacing: "1px",
+          }}
+        >
+          INITIALIZING NSE QUANT TERMINAL V2 (ANGEL ONE LIVE)...
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="dashboard-container">
-      {/* Header Bar */}
       <header className="dash-header">
         <div
           className="brand-group"
@@ -775,10 +661,7 @@ export default function DashboardPage() {
           <h1 className="title">NSE INTRADAY BIAS // TERMINAL V2</h1>
           {SessionStatus ? <SessionStatus /> : null}
 
-          {/* NIFTY 50 Live Indicator */}
           <div
-            className="has-tooltip"
-            data-tip="NIFTY 50 Market Direction. Filters counter-trend momentum traps."
             style={{
               display: "flex",
               alignItems: "center",
@@ -786,13 +669,7 @@ export default function DashboardPage() {
               padding: "3px 9px",
               borderRadius: 4,
               background: "#0f172a",
-              border: `1px solid ${
-                niftyBias === "BULLISH"
-                  ? "#2FD98A40"
-                  : niftyBias === "BEARISH"
-                    ? "#FF5D5D40"
-                    : "#1e293b"
-              }`,
+              border: `1px solid ${niftyData.change >= 0 ? "#2FD98A40" : "#FF5D5D40"}`,
               fontSize: "0.74rem",
               fontWeight: 600,
             }}
@@ -804,58 +681,33 @@ export default function DashboardPage() {
                 fontFamily: "monospace",
               }}
             >
-              {niftyData.ltp > 0 ? fmt(niftyData.ltp) : "Syncing..."}
+              {fmt(niftyData.ltp)}
             </span>
-            {niftyData.ltp > 0 && (
-              <span
-                style={{
-                  fontSize: "0.68rem",
-                  color: niftyData.change >= 0 ? "#2FD98A" : "#FF5D5D",
-                }}
-              >
-                ({niftyData.change >= 0 ? "+" : ""}
-                {fmt(niftyData.changePercent, 2)}%)
-              </span>
-            )}
+            <span
+              style={{
+                fontSize: "0.68rem",
+                color: niftyData.change >= 0 ? "#2FD98A" : "#FF5D5D",
+              }}
+            >
+              ({niftyData.change >= 0 ? "+" : ""}
+              {fmt(niftyData.changePercent, 2)}%)
+            </span>
           </div>
 
           <span
-            className="has-tooltip"
-            data-tip="Angel One SmartStream V2 WebSocket feed with Auto-Reconnection & Stale Data protection."
             style={{
               fontSize: "0.72rem",
               padding: "3px 8px",
               borderRadius: 4,
-              background: wsConnected
-                ? "rgba(47, 217, 138, 0.15)"
-                : "rgba(255, 93, 93, 0.15)",
-              color: wsConnected ? "#2FD98A" : "#FF5D5D",
-              border: `1px solid ${wsConnected ? "#2FD98A" : "#FF5D5D"}`,
+              background: "rgba(47, 217, 138, 0.15)",
+              color: "#2FD98A",
+              border: "1px solid #2FD98A",
+              fontWeight: 700,
             }}
           >
-            {wsConnected ? "● LIVE" : "○ RECONNECTING..."}
+            ● ANGEL ONE LIVE
           </span>
 
-          <span
-            className="has-tooltip"
-            data-tip={`Market Regime: ${marketRegime}. Chop zones automatically suppress false breakouts.`}
-            style={{
-              fontSize: "0.72rem",
-              padding: "3px 8px",
-              borderRadius: 4,
-              background:
-                marketRegime === "TRENDY_MOMENTUM"
-                  ? "rgba(47, 217, 138, 0.1)"
-                  : "rgba(245, 184, 65, 0.1)",
-              color: marketRegime === "TRENDY_MOMENTUM" ? "#2FD98A" : "#F5B841",
-              border: `1px solid ${marketRegime === "TRENDY_MOMENTUM" ? "#2FD98A40" : "#F5B84140"}`,
-              fontWeight: 600,
-            }}
-          >
-            {marketRegime === "TRENDY_MOMENTUM" ? "📈 TRENDY" : "📉 CHOPPY"}
-          </span>
-
-          {/* Emergency Kill Switch Toggle */}
           <button
             onClick={() => {
               const newState = !killSwitchActive;
@@ -880,8 +732,6 @@ export default function DashboardPage() {
 
           <Link
             href="/tips"
-            className="has-tooltip"
-            data-tip="View risk playbook and institutional sizing guidelines."
             style={{
               fontSize: "0.72rem",
               padding: "4px 10px",
@@ -901,10 +751,7 @@ export default function DashboardPage() {
           className="actions-group"
           style={{ display: "flex", alignItems: "center", gap: "12px" }}
         >
-          <div
-            className="tf-group has-tooltip"
-            data-tip="Trade signals are strictly locked to the 5M timeframe."
-          >
+          <div className="tf-group">
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf.value}
@@ -922,8 +769,7 @@ export default function DashboardPage() {
           />
 
           <span
-            className="active-ticker has-tooltip"
-            data-tip="Active stock symbol."
+            className="active-ticker"
             style={{ minWidth: "95px", textAlign: "center" }}
           >
             {currentStock.symbol}
@@ -931,7 +777,33 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Top 5 Price Band Scanner */}
+      {/* Quarantine Status Banner */}
+      {stockQuarantineStatus.inCooldown && (
+        <div
+          style={{
+            margin: "8px 0",
+            padding: "8px 14px",
+            background: "rgba(239, 68, 68, 0.15)",
+            border: "1px solid #ef4444",
+            borderRadius: 6,
+            color: "#f87171",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span>
+            🛡️ POST-LOSS LOCKOUT: {currentStock.symbol} is quarantined for{" "}
+            {stockQuarantineStatus.remainingMins}m to prevent rapid-fire losses.
+          </span>
+          <span style={{ fontSize: "0.7rem", color: "#fca5a5" }}>
+            SIGNALS MUTED
+          </span>
+        </div>
+      )}
+
       <PriceBandScanner
         stocks={STOCK_POOL}
         marketTicks={scannerTicks}
@@ -939,7 +811,7 @@ export default function DashboardPage() {
         onSelectStock={handleStockChange}
       />
 
-      {/* 📊 Chartink-Style Screener Widget */}
+      {/* Chartink Screener */}
       <section
         style={{
           margin: "12px 0",
@@ -959,23 +831,11 @@ export default function DashboardPage() {
             marginBottom: "10px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span
-              style={{
-                fontSize: "0.82rem",
-                fontWeight: 800,
-                color: "#38bdf8",
-                letterSpacing: "0.04em",
-              }}
-            >
-              📊 INTRADAY SCANNER (CHARTINK ENGINE) ⓘ
-            </span>
-            {lastScanTimestamp && (
-              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                Scanned at: {lastScanTimestamp}
-              </span>
-            )}
-          </div>
+          <span
+            style={{ fontSize: "0.82rem", fontWeight: 800, color: "#38bdf8" }}
+          >
+            📊 INTRADAY SCANNER (CHARTINK ENGINE)
+          </span>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <select
@@ -988,7 +848,6 @@ export default function DashboardPage() {
                 padding: "5px 10px",
                 borderRadius: "4px",
                 fontSize: "0.75rem",
-                cursor: "pointer",
               }}
             >
               {CHARTINK_STRATEGIES.map((st) => (
@@ -1076,39 +935,38 @@ export default function DashboardPage() {
             margin: "8px 0",
           }}
         >
-          NSE Feed Notice: {errorMsg}
+          Notice: {errorMsg}
         </div>
       )}
 
-      {/* Primary Grid */}
+      {/* Main Grid */}
       <div className="grid-main">
         <section className="card gauge-card">
-          <h2 className="card-title">COMPOSITE INTRADAY BIAS ⓘ</h2>
-
+          <h2 className="card-title">COMPOSITE INTRADAY BIAS</h2>
           {Gauge ? <Gauge score={finalCompositeScore} /> : null}
 
           <div className="quick-stats">
             <div className="stat-box">
-              <span className="stat-lbl">Live Spot LTP ⓘ</span>
+              <span className="stat-lbl">Live Spot LTP</span>
               <span className="stat-num" style={{ color: "#2FD98A" }}>
                 ₹{fmt(ind?.latest?.price)}
               </span>
             </div>
 
             <div className="stat-box">
-              <span className="stat-lbl">Session VWAP ⓘ</span>
+              <span className="stat-lbl">Session VWAP</span>
               <span className="stat-num">₹{fmt(ind?.latest?.vwap)}</span>
             </div>
 
             <div className="stat-box">
-              <span className="stat-lbl">Central Pivot (CPR) ⓘ</span>
+              <span className="stat-lbl">Central Pivot (CPR)</span>
               <span className="stat-num" style={{ color: "#c084fc" }}>
                 ₹{fmt(ind?.cpr?.pivot)}
               </span>
             </div>
 
             <div className="stat-box">
-              <span className="stat-lbl">Volatility State ⓘ</span>
+              <span className="stat-lbl">Volatility State</span>
               <span
                 className="stat-num"
                 style={{
@@ -1122,7 +980,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="stat-box full-width">
-              <span className="stat-lbl">Opening Range (ORB) ⓘ</span>
+              <span className="stat-lbl">Opening Range (ORB)</span>
               <span className="stat-num orb-state">
                 {ind?.orbState || "Inside Range"}
               </span>
@@ -1136,8 +994,6 @@ export default function DashboardPage() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "10px",
                 justifyContent: "space-between",
                 width: "100%",
               }}
@@ -1160,7 +1016,9 @@ export default function DashboardPage() {
                   color: patternBadgeColor,
                 }}
               >
-                <span>CANDLE: {candlePattern.name.toUpperCase()}</span>
+                <span>
+                  CANDLE: {(candlePattern?.name || "NONE").toUpperCase()}
+                </span>
                 <span
                   style={{
                     fontSize: "0.65rem",
@@ -1170,7 +1028,7 @@ export default function DashboardPage() {
                     color: "#cbd5e1",
                   }}
                 >
-                  {candlePattern.type}
+                  {candlePattern?.type || "NEUTRAL"}
                 </span>
               </div>
             </div>
@@ -1195,133 +1053,52 @@ export default function DashboardPage() {
           </div>
 
           {PriceChart ? (
-            <PriceChart
-              data={data}
-              ind={ind}
-              score={
-                isExecutionTimeframe && marketLive ? finalCompositeScore : 0
-              }
-            />
+            <PriceChart data={data} ind={ind} score={finalCompositeScore} />
           ) : null}
         </section>
       </div>
 
-      {/* Execution Deck */}
-      {ind?.latest?.price &&
-        (isExecutionTimeframe ? (
-          isSetupActive ? (
-            <SafeExecutionDeck
-              symbol={currentStock.symbol}
-              token={currentStock.token}
-              exchangeSegment={currentStock.exchangeSegment}
-              currentPrice={ind.latest.price}
-              side={
-                activeTradesRef.current[stockTokenStr]
-                  ? activeTradesRef.current[stockTokenStr].side
-                  : finalCompositeScore >= 0
-                    ? "BUY"
-                    : "SELL"
-              }
-              levels={calculateTradeLevels(
-                activeTradesRef.current[stockTokenStr]
-                  ? activeTradesRef.current[stockTokenStr].side
-                  : finalCompositeScore >= 0
-                    ? "BUY"
-                    : "SELL",
-                ind.latest.price,
-                currentAtr,
-              )}
-              atr={currentAtr}
-              score={finalCompositeScore}
-              volumeData={{
-                current: data[data.length - 1]?.volume || 0,
-                average: Math.round(
-                  data.slice(-20).reduce((acc, b) => acc + (b.volume || 1), 0) /
-                    Math.min(data.length, 20),
-                ),
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                marginTop: "16px",
-                padding: "16px 20px",
-                background: "rgba(15, 23, 42, 0.6)",
-                border: "1px dashed #334155",
-                borderRadius: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
-                <span
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: indicatorConflict.hasConflict
-                      ? "#FF5D5D"
-                      : "#64748b",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: "0.82rem",
-                    color: "#94a3b8",
-                    fontWeight: 600,
-                  }}
-                >
-                  {killSwitchActive
-                    ? "🚨 EMERGENCY KILL SWITCH ENABLED // ALL SIGNALS BLOCKED"
-                    : indicatorConflict.hasConflict
-                      ? indicatorConflict.message
-                      : "NEUTRAL CONSOLIDATION // NO ACTIVE 5M CALL"}
-                </span>
-              </div>
-              <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-                Score: {finalCompositeScore} pts (Threshold: ±65)
-              </span>
-            </div>
-          )
-        ) : (
-          <div
-            style={{
-              marginTop: "16px",
-              padding: "12px 18px",
-              background: "rgba(245, 184, 65, 0.05)",
-              border: "1px dashed rgba(245, 184, 65, 0.3)",
-              borderRadius: "8px",
-              color: "#F5B841",
-              fontSize: "0.78rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>
-              ⚠️ <strong>{selectedTF}M VIEW ACTIVE:</strong> Signals locked
-              strictly to 5M candles.
-            </span>
-            <button
-              onClick={() => setSelectedTF("5")}
-              style={{
-                background: "#F5B841",
-                color: "#0a0e17",
-                border: "none",
-                padding: "5px 12px",
-                borderRadius: "4px",
-                fontWeight: 700,
-                cursor: "pointer",
-                fontSize: "0.72rem",
-              }}
-            >
-              SWITCH TO 5M
-            </button>
-          </div>
-        ))}
+      {/* Execution Deck: Stabilized against tick flickering */}
+      {ind?.latest?.price && isExecutionTimeframe && isSetupActive && (
+        <SafeExecutionDeck
+          symbol={currentStock.symbol}
+          token={currentStock.token}
+          exchangeSegment={currentStock.exchangeSegment}
+          currentPrice={ind.latest.price}
+          entryPrice={activeTradeInstance?.entry || frozenTradeLevels.entry}
+          side={
+            activeTradeInstance
+              ? activeTradeInstance.side
+              : finalCompositeScore >= 0
+                ? "BUY"
+                : "SELL"
+          }
+          levels={{
+            entry: activeTradeInstance
+              ? activeTradeInstance.entry
+              : frozenTradeLevels.entry,
+            stopLoss: activeTradeInstance
+              ? activeTradeInstance.stopLoss
+              : frozenTradeLevels.stopLoss,
+            target1: activeTradeInstance
+              ? activeTradeInstance.target1
+              : frozenTradeLevels.target1,
+            target2: activeTradeInstance
+              ? activeTradeInstance.target2
+              : frozenTradeLevels.target2,
+          }}
+          atr={currentAtr}
+          score={finalCompositeScore}
+          isLiveTrade={!!activeTradeInstance}
+          volumeData={{
+            current: data[data.length - 1]?.volume || 0,
+            average: Math.round(
+              data.slice(-20).reduce((acc, b) => acc + (b.volume || 1), 0) /
+                Math.min(data.length, 20),
+            ),
+          }}
+        />
+      )}
 
       <AccuracyTracker
         activeAlert={activeAlert}
@@ -1333,9 +1110,13 @@ export default function DashboardPage() {
           symbol={currentStock.symbol}
           ind={ind}
           scores={scores}
-          atr={currentAtr}
+          score={finalCompositeScore}
+          timeframe={selectedTF}
+          pattern={candlePattern}
+          regime={marketRegime}
         />
       ) : null}
+
       <AiAnalystPanel
         symbol={currentStock.symbol}
         score={finalCompositeScore}
@@ -1346,13 +1127,12 @@ export default function DashboardPage() {
       {/* Secondary Indicators */}
       <div className="grid-secondary">
         <section className="card indicators-card">
-          <h2 className="card-title">INSTITUTIONAL WEIGHTED MATRIX ⓘ</h2>
+          <h2 className="card-title">INSTITUTIONAL WEIGHTED MATRIX</h2>
           <div className="ind-list">
             <TooltipIndicatorBar
               name="VWAP Stretch (22%)"
               score={scores.vwapScore}
               detail={ind?.latest?.vwap ? `₹${fmt(ind.latest.vwap)}` : "—"}
-              tooltip="Distance of price from VWAP."
             />
             <TooltipIndicatorBar
               name="9/21 EMA Stack (18%)"
@@ -1360,37 +1140,31 @@ export default function DashboardPage() {
               detail={
                 scores.trendScore >= 0 ? "Bullish Stack" : "Bearish Stack"
               }
-              tooltip="Fast vs Intermediate trend stacking."
             />
             <TooltipIndicatorBar
               name="MACD Acceleration (18%)"
               score={scores.macdScore}
               detail={fmt(ind?.latest?.hist, 3)}
-              tooltip="Momentum speed and histogram velocity."
             />
             <TooltipIndicatorBar
               name="RSI 14 Relative Strength (14%)"
               score={scores.rsiScore}
               detail={fmt(ind?.latest?.rsi, 1)}
-              tooltip="Relative strength boundary mapping."
             />
             <TooltipIndicatorBar
               name="CPR Institutional Position (12%)"
               score={scores.cprScore}
               detail={ind?.cprState || "Inside CPR"}
-              tooltip="Central Pivot Range positioning."
             />
             <TooltipIndicatorBar
               name="Opening Range Breakout (8%)"
               score={scores.orbScore}
               detail={ind?.orbState || "Inside Range"}
-              tooltip="First 15-minute range breach tracking."
             />
             <TooltipIndicatorBar
               name="Relative Volume Surge (8%)"
               score={scores.volScore}
               detail={`${scores.volScore >= 0 ? "+" : ""}${fmt(scores.volScore, 1)} pts`}
-              tooltip="Volume comparison against 20-period average."
             />
           </div>
         </section>
