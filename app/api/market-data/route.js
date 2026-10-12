@@ -38,7 +38,10 @@ function queued(fn) {
 }
 
 const pad = (n) => String(n).padStart(2, "0");
-const fmtDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// Always build Angel date ranges in IST (Vercel runs in UTC).
+const IST_MS = 5.5 * 60 * 60 * 1000;
+const istParts = (d) => { const x = new Date(d.getTime() + IST_MS); return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes() }; };
+const fmtDay = (d) => { const p = istParts(d); return `${p.y}-${pad(p.m)}-${pad(p.d)}`; };
 
 async function callAngel(session, token, intervalStr) {
   const now = new Date();
@@ -48,7 +51,7 @@ async function callAngel(session, token, intervalStr) {
     symboltoken: String(token),
     interval: intervalStr,
     fromdate: `${fmtDay(past)} 09:15`,
-    todate: `${fmtDay(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`,
+    todate: `${fmtDay(now)} ${pad(istParts(now).h)}:${pad(istParts(now).mi)}`,
   };
   const headers = {
     "Content-Type": "application/json",
