@@ -3,3 +3,6 @@
 .env
 .next
 node_modules
+# Market data, recordings and personal journal (large / private). Regenerate with the npm scripts.
+/data/
+*.tmp

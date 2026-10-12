@@ -662,3 +662,19 @@ body {
   right: 20px;
   transform: none;
 }
+
+/* ---- Chart workspace: big chart + side panel ---- */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 16px;
+    align-items: start;
+  }
+}

@@ -5,7 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "history": "node --no-warnings --env-file=.env.local --import ./scripts/register.mjs scripts/fetch-history.mjs",
+    "experiments": "node --no-warnings --import ./scripts/register.mjs scripts/experiments.mjs",
+    "history:daily": "node --no-warnings --env-file=.env.local --import ./scripts/register.mjs scripts/fetch-daily.mjs",
+    "daily-backtest": "node --no-warnings scripts/daily-backtest.mjs",
+    "history:movers": "node --no-warnings --env-file=.env.local --import ./scripts/register.mjs scripts/fetch-movers.mjs",
+    "backtest": "node --no-warnings --import ./scripts/register.mjs scripts/backtest.mjs",
+    "record": "node --no-warnings --env-file=.env.local --import ./scripts/register.mjs scripts/record-depth.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

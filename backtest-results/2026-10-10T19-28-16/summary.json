@@ -1,0 +1,196 @@
+{
+  "meta": {
+    "generatedAt": "2026-10-10T19:28:16.278Z",
+    "stockCount": 15,
+    "firstDate": "2026-07-13",
+    "lastDate": "2026-10-09",
+    "dayCount": 62,
+    "dataSources": [
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL",
+      "ANGEL_ONE_HISTORICAL"
+    ],
+    "niftyUsed": true
+  },
+  "config": {
+    "timeframeMinutes": 5,
+    "capital": 100000,
+    "riskPerTradePercent": 0.5,
+    "maxLeverage": 5,
+    "slippagePercent": 0.03,
+    "slippageOnTargets": false,
+    "skipSessionIfGapPercent": 15,
+    "indicatorHistorySessions": 5,
+    "inSampleShare": 0.7,
+    "verdict": {
+      "minTrades": 100,
+      "minOutOfSampleTrades": 30,
+      "minProfitFactor": 1.3,
+      "minExpectancyRs": 0
+    }
+  },
+  "overall": {
+    "trades": 2174,
+    "winRatePct": 27.6,
+    "grossPnl": -136099.68,
+    "costs": 181379.25,
+    "netPnl": -317479.15,
+    "avgWin": 257.98,
+    "avgLoss": -299.69,
+    "expectancyRs": -146.03,
+    "expectancyR": -0.29,
+    "profitFactorNet": 0.33,
+    "profitFactorGross": 0.61,
+    "maxDrawdownRs": 317479.15,
+    "maxDrawdownPct": 317.5,
+    "sharpeAnnualised": -31.06,
+    "avgHoldMinutes": 26.3
+  },
+  "inSample": {
+    "trades": 1494,
+    "winRatePct": 25.3,
+    "grossPnl": -108554.74,
+    "costs": 124846.36,
+    "netPnl": -233401.24,
+    "avgWin": 249.57,
+    "avgLoss": -293.67,
+    "expectancyRs": -156.23,
+    "expectancyR": -0.31,
+    "profitFactorNet": 0.29,
+    "profitFactorGross": 0.55,
+    "maxDrawdownRs": 233654.12,
+    "maxDrawdownPct": 233.7,
+    "sharpeAnnualised": -33.44,
+    "avgHoldMinutes": 26.3
+  },
+  "outSample": {
+    "trades": 680,
+    "winRatePct": 32.5,
+    "grossPnl": -27544.94,
+    "costs": 56532.89,
+    "netPnl": -84077.91,
+    "avgWin": 272.36,
+    "avgLoss": -314.31,
+    "expectancyRs": -123.64,
+    "expectancyR": -0.25,
+    "profitFactorNet": 0.42,
+    "profitFactorGross": 0.75,
+    "maxDrawdownRs": 84077.91,
+    "maxDrawdownPct": 84.1,
+    "sharpeAnnualised": -26.58,
+    "avgHoldMinutes": 26.1
+  },
+  "verdict": {
+    "pass": false,
+    "reasons": [
+      "average net result per trade is Rs -146.03 (must be above Rs 0)",
+      "net profit factor 0.33 is below 1.3",
+      "out-of-sample average is Rs -123.64 per trade (must be above Rs 0)",
+      "out-of-sample profit factor 0.42 is below 1.3"
+    ]
+  },
+  "perStock": {
+    "ASHOKLEY": {
+      "signals": 147,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "BANKBARODA": {
+      "signals": 160,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "BEL": {
+      "signals": 153,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "BHEL": {
+      "signals": 156,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "CANBK": {
+      "signals": 149,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "FEDERALBNK": {
+      "signals": 146,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "GAIL": {
+      "signals": 130,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "IDFCFIRSTB": {
+      "signals": 142,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "IOC": {
+      "signals": 137,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "NATIONALUM": {
+      "signals": 142,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "NMDC": {
+      "signals": 135,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "ONGC": {
+      "signals": 137,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "PNB": {
+      "signals": 149,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "SAIL": {
+      "signals": 143,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    },
+    "TATASTEEL": {
+      "signals": 148,
+      "unfilled": 0,
+      "skippedGapDays": 0,
+      "tradingDays": 62
+    }
+  }
+}

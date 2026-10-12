@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 
-export default function Gauge({ score = 0 }) {
+export default function Gauge({ score = 0, modeLabel = "LIVE" }) {
   // क्लैम्प स्कोर: -100 से +100
   const clampedScore = Math.max(-100, Math.min(100, score || 0));
 
@@ -326,7 +326,7 @@ export default function Gauge({ score = 0 }) {
           }}
         >
           <span>MOMENTUM PULSE</span>
-          <span style={{ color: color }}>LIVE</span>
+          <span style={{ color: color }}>{modeLabel}</span>
         </div>
 
         <svg

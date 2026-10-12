@@ -1,10 +1,31 @@
 // components/SignalAlertModal.jsx
 "use client";
 
-import { useEffect } from "react";
-import { fmt } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { fmt, formatRiskReward } from "@/lib/utils";
 
-export default function SignalAlertModal({ alert, onClose }) {
+// The long rules box is shown open only the first time in a page session.
+// Keyed by the alert object so React strict-mode double effects stay stable.
+let everShownRules = false;
+let rulesFor = { alert: null, open: false };
+
+export default function SignalAlertModal({
+  alert,
+  onClose,
+  onAddWatchlist,
+  inWatchlist = false,
+}) {
+  const [rulesOpen, setRulesOpen] = useState(false);
+
+  useEffect(() => {
+    if (!alert) return;
+    if (rulesFor.alert !== alert) {
+      rulesFor = { alert, open: !everShownRules };
+      everShownRules = true;
+    }
+    setRulesOpen(rulesFor.open);
+  }, [alert]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") onClose();
@@ -82,12 +103,27 @@ export default function SignalAlertModal({ alert, onClose }) {
                 letterSpacing: "0.04em",
               }}
             >
-              {isExit && "🚨 EMERGENCY EXIT // CUT POSITION NOW"}
-              {isTarget && "🎯 TARGET 1 ACHIEVED"}
-              {isSl && "🛑 STOP LOSS HIT"}
-              {isBuy && "⚡ 5M INSTITUTIONAL BUY CALL"}
-              {isSell && "⚡ 5M INSTITUTIONAL SELL CALL"}
+              {alert.title ||
+                (isExit && "🚨 EMERGENCY EXIT // CUT POSITION NOW") ||
+                (isTarget && "🎯 TARGET HIT") ||
+                (isSl && "🛑 STOP LOSS HIT") ||
+                (isBuy && "⚡ 5M INSTITUTIONAL BUY CALL") ||
+                (isSell && "⚡ 5M INSTITUTIONAL SELL CALL")}
             </h3>
+            {alert.isReplay && (
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  fontWeight: 800,
+                  padding: "2px 6px",
+                  borderRadius: 3,
+                  background: "#fbbf24",
+                  color: "#0b101b",
+                }}
+              >
+                REPLAY - PRACTICE ONLY
+              </span>
+            )}
           </div>
 
           <button
@@ -235,7 +271,7 @@ export default function SignalAlertModal({ alert, onClose }) {
                 }}
               >
                 <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                  TARGET 1 (1:1.5)
+                  TARGET 1 ({formatRiskReward(alert.levels.entry, alert.levels.stopLoss, alert.levels.target1)})
                 </div>
                 <div
                   style={{
@@ -258,7 +294,7 @@ export default function SignalAlertModal({ alert, onClose }) {
                 }}
               >
                 <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                  TARGET 2 (1:2.5)
+                  TARGET 2 ({formatRiskReward(alert.levels.entry, alert.levels.stopLoss, alert.levels.target2)})
                 </div>
                 <div
                   style={{
@@ -274,46 +310,44 @@ export default function SignalAlertModal({ alert, onClose }) {
             </div>
           )}
 
-          <div
-            style={{
-              background: "#070b13",
-              border: "1px solid #1e293b",
-              borderRadius: "6px",
-              padding: "10px 12px",
-              fontSize: "0.72rem",
-              color: "#94a3b8",
-            }}
-          >
-            <div
+          {(isBuy || isSell) && (
+            <details
+              open={rulesOpen}
               style={{
-                color: "#e2e8f0",
-                fontWeight: 700,
-                marginBottom: "6px",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
+                background: "#070b13",
+                border: "1px solid #1e293b",
+                borderRadius: "6px",
+                padding: "8px 12px",
+                fontSize: "0.72rem",
+                color: "#94a3b8",
               }}
             >
-              <span>📋</span> MANDATORY TRADING RULES (USER DISCIPLINE)
-            </div>
-            <ul style={{ margin: 0, paddingLeft: "16px", lineHeight: "1.6" }}>
-              <li>
-                <strong>Trade Window:</strong> 15 से 25 मिनट (3–5 कैंडल्स)।
-              </li>
-              <li>
-                <strong>Stagnation Exit:</strong> 20 मिनट तक मूव न आने पर कॉस्ट
-                पर निकलें।
-              </li>
-              <li>
-                <strong>Immediate Cut:</strong> 5M कैंडल Session VWAP के विपरीत
-                क्लोज होते ही एग्जिट।
-              </li>
-              <li style={{ color: "#f59e0b" }}>
-                <strong>Self-Analysis:</strong> यह केवल एल्गो मैट्रिक्स सेटअप
-                है। रिस्क और साइजिंग आपकी अपनी जिम्मेदारी है।
-              </li>
-            </ul>
-          </div>
+              <summary
+                style={{ color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}
+              >
+                📋 Trading rules (tap to {rulesOpen ? "hide" : "read"})
+              </summary>
+              <ul
+                style={{ margin: "6px 0 0", paddingLeft: "16px", lineHeight: "1.6" }}
+              >
+                <li>
+                  <strong>Trade Window:</strong> 15 से 25 मिनट (3–5 कैंडल्स)।
+                </li>
+                <li>
+                  <strong>Stagnation Exit:</strong> 20 मिनट तक मूव न आने पर कॉस्ट
+                  पर निकलें।
+                </li>
+                <li>
+                  <strong>Immediate Cut:</strong> 5M कैंडल Session VWAP के विपरीत
+                  क्लोज होते ही एग्जिट।
+                </li>
+                <li style={{ color: "#f59e0b" }}>
+                  <strong>Self-Analysis:</strong> यह केवल एल्गो मैट्रिक्स सेटअप
+                  है। रिस्क और साइजिंग आपकी अपनी जिम्मेदारी है।
+                </li>
+              </ul>
+            </details>
+          )}
         </div>
 
         <div
@@ -323,8 +357,27 @@ export default function SignalAlertModal({ alert, onClose }) {
             borderTop: "1px solid #1e293b",
             display: "flex",
             justifyContent: "flex-end",
+            gap: 10,
           }}
         >
+          {(isBuy || isSell) && onAddWatchlist && (
+            <button
+              onClick={onAddWatchlist}
+              disabled={inWatchlist}
+              style={{
+                background: "transparent",
+                color: inWatchlist ? "#64748b" : "#fbbf24",
+                border: `1px solid ${inWatchlist ? "#334155" : "#fbbf24"}`,
+                padding: "7px 14px",
+                borderRadius: "5px",
+                fontSize: "0.75rem",
+                fontWeight: 800,
+                cursor: inWatchlist ? "default" : "pointer",
+              }}
+            >
+              {inWatchlist ? "★ In watchlist" : "☆ Add to watchlist"}
+            </button>
+          )}
           <button
             onClick={onClose}
             style={{

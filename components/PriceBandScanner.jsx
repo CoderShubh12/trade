@@ -34,6 +34,7 @@ export default function PriceBandScanner({
       return {
         ...item,
         currentBand,
+        hasData: live.ltp > 0, // false = this stock has not been scanned yet
         ltp: live.ltp,
         score: live.score || 0,
         chgPct: live.chgPct || 0,
@@ -244,11 +245,16 @@ export default function PriceBandScanner({
                       style={{
                         fontSize: "0.68rem",
                         fontWeight: 700,
-                        color: isBullish ? "#2FD98A" : "#FF5D5D",
+                        color: !item.hasData
+                          ? "#64748b"
+                          : isBullish
+                            ? "#2FD98A"
+                            : "#FF5D5D",
                       }}
                     >
-                      {isBullish ? "+" : ""}
-                      {item.score} pts
+                      {item.hasData
+                        ? `${isBullish ? "+" : ""}${item.score} pts`
+                        : "not scanned"}
                     </span>
                   )}
                 </div>

@@ -1,38 +1,84 @@
 // app/api/auth/login/route.js
+// Login. The user name and password come from .env.local (never from code):
+//   APP_LOGIN_USER=...
+//   APP_LOGIN_PASSWORD=...
+//   APP_SESSION_SECRET=...   (at least 32 random characters)
 import { NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "node:crypto";
+import {
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_S,
+  createSessionToken,
+  isSecretOk,
+} from "@/lib/session";
 
-const USERS = {
-  admin: { password: "adminPassword123", role: "ADMIN" },
-  Aditya1802: { password: "Rana1802", role: "TESTER" }, // 👈 यहाँ पासवर्ड "Rana1802" और रोल "TESTER" कर दिया है
-};
+// Compare without leaking how many characters matched
+const sha = (s) => createHash("sha256").update(String(s)).digest();
+const same = (a, b) => timingSafeEqual(sha(a), sha(b));
+
+// Simple brute-force brake: 5 wrong tries per 15 minutes per address
+const attempts = new Map();
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILS = 5;
+
+function tooManyTries(ip) {
+  const now = Date.now();
+  const rec = (attempts.get(ip) || []).filter((t) => now - t < WINDOW_MS);
+  attempts.set(ip, rec);
+  return rec.length >= MAX_FAILS;
+}
 
 export async function POST(request) {
-  try {
-    const { username, password } = await request.json();
+  const user = process.env.APP_LOGIN_USER;
+  const pass = process.env.APP_LOGIN_PASSWORD;
+  const secret = process.env.APP_SESSION_SECRET;
 
-    const user = USERS[username];
-    if (!user || user.password !== password) {
-      return NextResponse.json(
-        { success: false, error: "अमान्य यूज़रनेम या पासवर्ड!" },
-        { status: 401 },
-      );
-    }
-
-    const response = NextResponse.json({ success: true, role: user.role });
-    response.cookies.set({
-      name: "terminal_session",
-      value: JSON.stringify({ username, role: user.role }),
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return response;
-  } catch (e) {
+  // Fail closed: if the server is not configured, nobody gets in.
+  if (!user || !pass || !isSecretOk(secret)) {
     return NextResponse.json(
-      { success: false, error: "सर्वर एरर" },
-      { status: 500 },
+      {
+        success: false,
+        error:
+          "Login is not configured. Add APP_LOGIN_USER, APP_LOGIN_PASSWORD and APP_SESSION_SECRET (32+ characters) to .env.local and restart.",
+      },
+      { status: 503 },
     );
   }
+
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
+  if (tooManyTries(ip)) {
+    return NextResponse.json(
+      { success: false, error: "Too many attempts. Try again in 15 minutes." },
+      { status: 429 },
+    );
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ success: false, error: "Bad request" }, { status: 400 });
+  }
+
+  // Check both fields every time so timing does not reveal which was wrong
+  const userOk = same(body?.username ?? "", user);
+  const passOk = same(body?.password ?? "", pass);
+  if (!(userOk && passOk)) {
+    attempts.get(ip).push(Date.now());
+    return NextResponse.json({ success: false, error: "Invalid credentials" }, { status: 401 });
+  }
+
+  attempts.delete(ip);
+  const token = await createSessionToken({ username: user, role: "admin" }, secret);
+  const response = NextResponse.json({ success: true, role: "admin" });
+  response.cookies.set({
+    name: SESSION_COOKIE,
+    value: token,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_S,
+  });
+  return response;
 }
