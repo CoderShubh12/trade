@@ -1,4 +1,4 @@
-// middleware.js
+// middleware.js (session check; rebuilt 2026-10-12 so it picks up the new APP_SESSION_SECRET)
 // Every page and every /api route needs a genuine (signed, unexpired) login
 // cookie, except the login page and /api/auth/*.
 import { NextResponse } from "next/server";
