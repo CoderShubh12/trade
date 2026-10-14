@@ -321,7 +321,13 @@ export default function DashboardPage() {
 
   // Paper journal: send every LIVE call (and its exit) to the server file, once per change
   const journalSent = useRef(new Set());
+  // When the SERVER engine is on it records calls/exits itself; this page must not journal the same call again.
+  const serverEngineOn = useRef(false);
   useEffect(() => {
+    fetch("/api/engine").then((r) => r.json()).then((j) => { serverEngineOn.current = !!(j && j.enabled); }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (serverEngineOn.current) return;
     tradeLog.forEach((t) => {
       if (t.isReplay) return;
       const sig = `${t.id}|${t.exitPrice ?? ""}`;
@@ -330,6 +336,22 @@ export default function DashboardPage() {
       fetch("/api/journal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(t) }).catch(() => journalSent.current.delete(sig));
     });
   }, [tradeLog]);
+
+  // News tag (real headlines tagged by Groq) -> stored with each call as an ML feature. Shadow only; never blocks a call.
+  const newsRef = useRef({ symbol: "", tag: null });
+  useEffect(() => {
+    if (mode === "REPLAY" || !currentStock?.symbol) return;
+    let dead = false;
+    const sym = currentStock.symbol;
+    const load = () =>
+      fetch(`/api/news?symbol=${encodeURIComponent(sym)}`)
+        .then((r) => r.json())
+        .then((j) => { if (!dead) newsRef.current = { symbol: sym, tag: j && j.available ? j : null }; })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 10 * 60 * 1000);
+    return () => { dead = true; clearInterval(id); };
+  }, [currentStock?.symbol, mode]);
 
   // Save only LIVE calls of today
   useEffect(() => {
@@ -1017,6 +1039,20 @@ export default function DashboardPage() {
             entryClock: hhmmStr(nowMs),
             dateStr: dayKey,
             isReplay,
+            timeframe: selectedTF,
+            token: String(stockToken),
+            // Feature snapshot for future ML training (shadow only; never changes the call)
+            feat: {
+              score: Number(signalScore?.score ?? signalScore) || 0,
+              atrPct: signalAtr && setup.entry ? +((signalAtr / setup.entry) * 100).toFixed(3) : 0,
+              vwapDist: signalAtr ? +(((setup.entry - (signalBasis.ind?.latest?.vwap ?? vwap)) / signalAtr)).toFixed(3) : 0,
+              vol: Number(completedCandle?.volume) || 0,
+              regime: typeof marketRegime === "string" ? marketRegime : (marketRegime?.label || marketRegime?.regime || ""),
+              niftyBias: typeof niftyBias === "string" ? niftyBias : (niftyBias?.bias || niftyBias?.label || ""),
+              mins: (Math.floor(nowMs / 60000) + 330) % 1440, // minutes since midnight IST
+              newsSent: newsRef.current.symbol === currentStock.symbol && newsRef.current.tag ? newsRef.current.tag.sentiment : 0,
+              eventRisk: newsRef.current.symbol === currentStock.symbol && newsRef.current.tag ? newsRef.current.tag.eventRisk : "nodata",
+            },
             stopLoss: setup.stopLoss,
             initialSl: setup.initialSl ?? setup.stopLoss,
             target1: setup.target1,
@@ -1566,6 +1602,22 @@ export default function DashboardPage() {
             }}
           >
             📖 PLAYBOOK
+          </Link>
+
+          <Link
+            href="/dashboard"
+            style={{
+              fontSize: "0.72rem",
+              padding: "4px 10px",
+              borderRadius: 4,
+              background: "rgba(91, 140, 255, 0.12)",
+              color: "#5B8CFF",
+              border: "1px solid rgba(91, 140, 255, 0.3)",
+              textDecoration: "none",
+              fontWeight: 700,
+            }}
+          >
+            📊 100-TRADE GATE
           </Link>
         </div>
 

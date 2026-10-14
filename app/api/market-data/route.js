@@ -15,9 +15,9 @@ g.__candleInflight = g.__candleInflight || new Map(); // key -> Promise
 g.__angelQueueTail = g.__angelQueueTail || Promise.resolve();
 g.__angelLastCall = g.__angelLastCall || 0;
 
-const FRESH_MS = 5000; // serve from cache this long
+const FRESH_MS = 12000; // serve from cache this long
 const STALE_OK_MS = 180000; // on Angel errors, serve older data up to 3 min (flagged)
-const MIN_GAP_MS = 400; // Angel allows ~3 historical calls/second; stay under it
+const MIN_GAP_MS = 700; // Angel allows ~3 historical calls/second; stay under it
 
 const INTERVAL_MAP = { 1: "ONE_MINUTE", 3: "THREE_MINUTE", 5: "FIVE_MINUTE", 15: "FIFTEEN_MINUTE" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -82,7 +82,9 @@ async function fetchCandles(token, tf) {
   } catch (e) {
     const code = e.response?.status;
     if (code === 403 || code === 429) {
-      g.__candlePauseUntil = Date.now() + 4000; // back off, serve cached candles meanwhile
+      // Escalating back-off: 10s, 20s, 40s, then 60s while Angel keeps refusing; resets on the first success.
+      g.__candleFails = (g.__candleFails || 0) + 1;
+      g.__candlePauseUntil = Date.now() + Math.min(60000, 10000 * 2 ** (g.__candleFails - 1));
       throw e;
     }
     if (e.code === "ECONNABORTED") {
@@ -90,11 +92,13 @@ async function fetchCandles(token, tf) {
       res = await queued(() => callAngel(session, token, intervalStr));
     } else throw e;
   }
+  g.__candleFails = 0;
   const raw = res.data?.data;
   if (!(res.data?.status && Array.isArray(raw) && raw.length > 0)) {
     throw Object.assign(new Error(res.data?.message || "No candle data returned from exchange."), { empty: true });
   }
-  return raw.map((b) => {
+  // Drop placeholder candles (zero volume and flat O=H=L=C, e.g. the 15:25 closing stub) - they draw a junk wick and skew indicators.
+  return raw.filter((b) => !(Number(b[5]) === 0 && b[1] === b[2] && b[2] === b[3] && b[3] === b[4])).map((b) => {
     const ts = String(b[0]);
     return {
       time: Math.floor(new Date(ts).getTime() / 1000),
