@@ -22,7 +22,8 @@ async function headlines(symbol) {
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 8).map((m) => {
     const t = (m[1].match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "";
     const d = (m[1].match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "";
-    return { title: decode(t).slice(0, 200), published: d };
+    const src = (m[1].match(/<source[^>]*>([\s\S]*?)<\/source>/) || [])[1] || "";
+    return { title: decode(t).slice(0, 200), published: d, source: decode(src).slice(0, 40) };
   });
   return items.filter((x) => x.title);
 }
@@ -41,7 +42,7 @@ async function tag(symbol, items) {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: "You tag news headlines for an Indian equity intraday trader. Use ONLY the headlines given. Do not mention prices or predict. Reply with JSON only." },
-        { role: "user", content: `Stock: ${symbol}\nHeadlines:\n${list}\n\nReturn JSON: {"sentiment": number from -1 (very negative) to 1 (very positive) for ${symbol} only, "eventRisk": "none"|"low"|"high" (high = results, regulatory action, fraud, block deal, merger, rating change, or other scheduled/major event likely to cause a sharp move today), "reason": short phrase under 15 words}. If headlines are not about ${symbol}, use sentiment 0 and eventRisk "none".` },
+        { role: "user", content: `Stock: ${symbol}\nHeadlines:\n${list}\n\nReturn JSON: {"sentiment": number from -1 (very negative) to 1 (very positive) for ${symbol} only, "eventRisk": "none"|"low"|"high" (high = results, regulatory action, fraud, block deal, merger, rating change, or other scheduled/major event likely to cause a sharp move today), "credibility": number 0 to 1 (how trustworthy the set is: low for rumours, clickbait, single unverified source, or contradictory stories; high for company filings or several independent outlets agreeing), "impactScope": "stock"|"sector"|"market"|"none" (what the news affects), "impactHorizon": "intraday"|"days"|"long"|"none", "themes": [up to 3 short phrases], "reason": short phrase under 15 words}. If headlines are not about ${symbol}, use sentiment 0, eventRisk "none", impactScope "none".` },
       ],
     }),
   });
@@ -50,7 +51,11 @@ async function tag(symbol, items) {
   const o = JSON.parse(j.choices?.[0]?.message?.content || "{}");
   const sentiment = Math.max(-1, Math.min(1, Number(o.sentiment) || 0));
   const eventRisk = ["none", "low", "high"].includes(o.eventRisk) ? o.eventRisk : "none";
-  return { sentiment, eventRisk, reason: String(o.reason || "").slice(0, 120) };
+  const credibility = Math.max(0, Math.min(1, Number(o.credibility)));
+  const impactScope = ["stock", "sector", "market", "none"].includes(o.impactScope) ? o.impactScope : "none";
+  const impactHorizon = ["intraday", "days", "long", "none"].includes(o.impactHorizon) ? o.impactHorizon : "none";
+  const themes = Array.isArray(o.themes) ? o.themes.slice(0, 3).map((x) => String(x).slice(0, 60)) : [];
+  return { sentiment, eventRisk, credibility: Number.isFinite(credibility) ? +credibility.toFixed(2) : null, impactScope, impactHorizon, themes, reason: String(o.reason || "").slice(0, 120) };
 }
 
 export async function GET(request) {
@@ -64,7 +69,7 @@ export async function GET(request) {
     if (!items.length) body = { success: true, available: false, reason: "No recent headlines", headlines: [] };
     else {
       const t = await tag(symbol, items).catch((e) => ({ error: String(e.message || e) }));
-      if (t && !t.error) body = { success: true, available: true, ...t, headlines: items.slice(0, 5), asOf: new Date().toISOString() };
+      if (t && !t.error) body = { success: true, available: true, ...t, sources: new Set(items.map((x) => x.source).filter(Boolean)).size, headlines: items.slice(0, 5), asOf: new Date().toISOString() };
       else body = { success: true, available: false, reason: t?.error || "Groq key missing", headlines: items.slice(0, 5) };
     }
   } catch (e) {

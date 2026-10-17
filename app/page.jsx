@@ -1052,6 +1052,8 @@ export default function DashboardPage() {
               mins: (Math.floor(nowMs / 60000) + 330) % 1440, // minutes since midnight IST
               newsSent: newsRef.current.symbol === currentStock.symbol && newsRef.current.tag ? newsRef.current.tag.sentiment : 0,
               eventRisk: newsRef.current.symbol === currentStock.symbol && newsRef.current.tag ? newsRef.current.tag.eventRisk : "nodata",
+              newsCred: newsRef.current.symbol === currentStock.symbol && newsRef.current.tag && newsRef.current.tag.credibility != null ? newsRef.current.tag.credibility : -1,
+              newsScope: newsRef.current.symbol === currentStock.symbol && newsRef.current.tag ? newsRef.current.tag.impactScope || "none" : "nodata",
             },
             stopLoss: setup.stopLoss,
             initialSl: setup.initialSl ?? setup.stopLoss,
@@ -1618,6 +1620,22 @@ export default function DashboardPage() {
             }}
           >
             📊 100-TRADE GATE
+          </Link>
+
+          <Link
+            href="/research"
+            style={{
+              fontSize: "0.72rem",
+              padding: "4px 10px",
+              borderRadius: 4,
+              background: "rgba(91, 140, 255, 0.12)",
+              color: "#5B8CFF",
+              border: "1px solid rgba(91, 140, 255, 0.3)",
+              textDecoration: "none",
+              fontWeight: 700,
+            }}
+          >
+            🤖 BOTS
           </Link>
         </div>
 
