@@ -1,0 +1,22 @@
+44 stocks, 190324 bars scanned, 6589 pattern signals, 2026-07-13 -> 2026-10-09, split at 2026-09-11
+
+pattern              ALL                                                        TEST                                                       REVERSED(all)
+tri_sym_dn           n=  307 win= 23.1% PF= 0.22 net/trade=-0.625R              n=   75 win= 18.7% PF= 0.16 net/trade=-0.742R              n=  307 win= 24.4% PF= 0.23 net/trade=-0.582R 
+dbl_bottom           n=  316 win= 27.2% PF= 0.30 net/trade=-0.559R              n=  105 win= 25.7% PF= 0.24 net/trade=-0.661R              n=  316 win= 26.3% PF= 0.22 net/trade=-0.607R 
+bull_flag            n=  392 win= 25.0% PF= 0.24 net/trade=-0.617R              n=  124 win= 23.4% PF= 0.19 net/trade=-0.683R              n=  392 win= 34.4% PF= 0.34 net/trade=-0.452R 
+inside_break_up      n= 1346 win= 25.2% PF= 0.26 net/trade=-0.581R              n=  454 win= 25.6% PF= 0.28 net/trade=-0.552R              n= 1346 win= 25.4% PF= 0.22 net/trade=-0.589R 
+box_break_up         n=  609 win= 21.2% PF= 0.21 net/trade=-0.704R              n=  185 win= 20.5% PF= 0.20 net/trade=-0.731R              n=  609 win= 30.4% PF= 0.30 net/trade=-0.518R 
+inside_break_dn      n= 1468 win= 24.6% PF= 0.25 net/trade=-0.579R              n=  452 win= 28.3% PF= 0.31 net/trade=-0.502R              n= 1468 win= 26.0% PF= 0.26 net/trade=-0.551R 
+tri_asc_up           n=   47 win= 17.0% PF= 0.22 net/trade=-0.681R              n=   15 win=  6.7% PF= 0.09 net/trade=-0.868R              n=   47 win= 19.1% PF= 0.11 net/trade=-0.850R 
+head_shoulders       n=   70 win= 25.7% PF= 0.27 net/trade=-0.499R              n=   20 win= 25.0% PF= 0.26 net/trade=-0.462R              n=   70 win= 24.3% PF= 0.21 net/trade=-0.682R 
+bear_flag            n=  668 win= 26.8% PF= 0.30 net/trade=-0.502R              n=  242 win= 31.4% PF= 0.43 net/trade=-0.370R              n=  668 win= 23.5% PF= 0.22 net/trade=-0.613R 
+box_break_dn         n=  657 win= 23.3% PF= 0.23 net/trade=-0.602R              n=  189 win= 30.2% PF= 0.35 net/trade=-0.443R              n=  657 win= 25.7% PF= 0.25 net/trade=-0.580R 
+tri_sym_up           n=  289 win= 22.8% PF= 0.21 net/trade=-0.674R              n=   65 win= 30.8% PF= 0.37 net/trade=-0.473R              n=  289 win= 27.7% PF= 0.26 net/trade=-0.530R 
+dbl_top              n=  323 win= 22.3% PF= 0.20 net/trade=-0.656R              n=   98 win= 25.5% PF= 0.25 net/trade=-0.614R              n=  323 win= 29.1% PF= 0.26 net/trade=-0.570R 
+inv_head_shoulders   n=   65 win= 21.5% PF= 0.16 net/trade=-0.732R              n=   18 win= 33.3% PF= 0.32 net/trade=-0.471R              n=   65 win= 23.1% PF= 0.22 net/trade=-0.616R 
+tri_desc_dn          n=   32 win= 18.8% PF= 0.15 net/trade=-0.755R              n=    9 win= 22.2% PF= 0.22 net/trade=-0.813R              n=   32 win= 31.3% PF= 0.37 net/trade=-0.453R 
+ALL PATTERNS         n= 6589 win= 24.3% PF= 0.24 net/trade=-0.599R              n= 2051 win= 26.5% PF= 0.28 net/trade=-0.548R              n= 6589 win= 26.6% PF= 0.25 net/trade=-0.567R 
+
+Strong signals only (strength >= 0.6): n= 1905 win= 25.3% PF= 0.27 net/trade=-0.582R | reversed: n= 1905 win= 27.3% PF= 0.26 net/trade=-0.577R
+
+No pattern passed the gate (n>=100, PF>=1.3, both halves positive). Patterns stay display-only.
