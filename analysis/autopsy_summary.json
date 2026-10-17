@@ -1,0 +1,321 @@
+{
+  "generatedFor": "42 stocks, 2026-07-13 -> 2026-10-09",
+  "note": "DIAGNOSTIC: why simulated trades fail. Not a profitability claim.",
+  "split": "2026-09-11",
+  "overall": {
+    "all": {
+      "n": 6560,
+      "win": 22.7,
+      "pf": 0.25,
+      "avgNetR": -0.291
+    },
+    "train": {
+      "n": 4501,
+      "win": 20.9,
+      "pf": 0.23,
+      "avgNetR": -0.303
+    },
+    "test": {
+      "n": 2059,
+      "win": 26.6,
+      "pf": 0.31,
+      "avgNetR": -0.267
+    }
+  },
+  "losses": {
+    "n": 4151,
+    "shareOfTrades": 63.3,
+    "byCause": {
+      "TIME_DECAY": {
+        "n": 2075,
+        "pct": 50,
+        "avgNetR": -0.455
+      },
+      "TREND_AGAINST": {
+        "n": 1472,
+        "pct": 35.5,
+        "avgNetR": -0.632
+      },
+      "LATE_ENTRY": {
+        "n": 260,
+        "pct": 6.3,
+        "avgNetR": -0.968
+      },
+      "NOISE_STOP": {
+        "n": 183,
+        "pct": 4.4,
+        "avgNetR": -1.184
+      },
+      "OTHER": {
+        "n": 143,
+        "pct": 3.4,
+        "avgNetR": -0.554
+      },
+      "GAP": {
+        "n": 18,
+        "pct": 0.4,
+        "avgNetR": -1.665
+      }
+    }
+  },
+  "byTimeOfDay": {
+    "AFTERNOON": {
+      "n": 2356,
+      "win": 21.3,
+      "pf": 0.21,
+      "avgNetR": -0.27
+    },
+    "CLOSE": {
+      "n": 62,
+      "win": 21,
+      "pf": 0.17,
+      "avgNetR": -0.317
+    },
+    "MIDDAY": {
+      "n": 115,
+      "win": 20,
+      "pf": 0.18,
+      "avgNetR": -0.339
+    },
+    "MORNING": {
+      "n": 4027,
+      "win": 23.6,
+      "pf": 0.27,
+      "avgNetR": -0.302
+    }
+  },
+  "byVwapSide": {
+    "against VWAP": {
+      "n": 109,
+      "win": 0.9,
+      "pf": 0,
+      "avgNetR": -0.274
+    },
+    "with VWAP": {
+      "n": 6451,
+      "win": 23.1,
+      "pf": 0.25,
+      "avgNetR": -0.292
+    }
+  },
+  "bySide": {
+    "BUY": {
+      "n": 2817,
+      "win": 21.5,
+      "pf": 0.25,
+      "avgNetR": -0.315
+    },
+    "SELL": {
+      "n": 3743,
+      "win": 23.6,
+      "pf": 0.25,
+      "avgNetR": -0.273
+    }
+  },
+  "byRegime": {
+    "CHOPPY_SIDEWAYS": {
+      "n": 598,
+      "win": 17.2,
+      "pf": 0.13,
+      "avgNetR": -0.273
+    },
+    "TRENDY_MOMENTUM": {
+      "n": 5962,
+      "win": 23.2,
+      "pf": 0.26,
+      "avgNetR": -0.293
+    }
+  },
+  "byLateEntry": {
+    "entry >1.5 ATR from VWAP": {
+      "n": 3241,
+      "win": 24.1,
+      "pf": 0.25,
+      "avgNetR": -0.284
+    },
+    "entry within 1.5 ATR of VWAP": {
+      "n": 3319,
+      "win": 21.3,
+      "pf": 0.25,
+      "avgNetR": -0.299
+    }
+  },
+  "byExitReason": {
+    "STOP_LOSS_HIT": {
+      "n": 128,
+      "win": 0,
+      "pf": 0,
+      "avgNetR": -1.211
+    },
+    "TARGET_2_HIT": {
+      "n": 19,
+      "win": 100,
+      "pf": 999,
+      "avgNetR": 2.707
+    },
+    "TIME_DECAY_TIMEOUT": {
+      "n": 4459,
+      "win": 32.9,
+      "pf": 0.56,
+      "avgNetR": -0.105
+    },
+    "TRAILING_SL_HIT": {
+      "n": 9,
+      "win": 0,
+      "pf": 0,
+      "avgNetR": -0.01
+    },
+    "VWAP_BREACH_EXIT": {
+      "n": 1945,
+      "win": 0.1,
+      "pf": 0,
+      "avgNetR": -0.689
+    }
+  },
+  "byPattern": {
+    "candle pattern AGAINST trade": {
+      "n": 242,
+      "win": 26,
+      "pf": 0.29,
+      "avgNetR": -0.265
+    },
+    "candle pattern WITH trade": {
+      "n": 2377,
+      "win": 22.1,
+      "pf": 0.25,
+      "avgNetR": -0.28
+    },
+    "chart pattern AGAINST trade": {
+      "n": 3,
+      "win": 0,
+      "pf": 0,
+      "avgNetR": -0.78
+    },
+    "chart pattern WITH trade": {
+      "n": 719,
+      "win": 21,
+      "pf": 0.21,
+      "avgNetR": -0.303
+    },
+    "no pattern": {
+      "n": 3219,
+      "win": 23.2,
+      "pf": 0.26,
+      "avgNetR": -0.299
+    }
+  },
+  "mfe": {
+    "allTrades": {
+      "<0.25R": 3329,
+      "0.25-0.5R": 1517,
+      "0.5-1R": 1167,
+      "1-1.67R": 416,
+      ">=1.67R (T1 distance)": 131
+    },
+    "losingTrades": {
+      "<0.25R": 3026,
+      "0.25-0.5R": 785,
+      "0.5-1R": 301,
+      "1-1.67R": 37,
+      ">=1.67R (T1 distance)": 2
+    },
+    "lossesThatReachedHalfR": 8.2,
+    "lossesThatReached1R": 0.9,
+    "lossesWhereT1WasReachable": 0,
+    "avgGaveBackRLosses": 0.181
+  },
+  "stopWidth": {
+    "1.2 ATR": {
+      "trades": 6560,
+      "stoppedOut": 128,
+      "stopRatePct": 2,
+      "noiseStopPctOfStops": 68,
+      "n": 6560,
+      "win": 22.7,
+      "pf": 0.25,
+      "avgNetR": -0.291
+    },
+    "1.6 ATR": {
+      "trades": 6554,
+      "stoppedOut": 28,
+      "stopRatePct": 0.4,
+      "noiseStopPctOfStops": 71.4,
+      "n": 6554,
+      "win": 21.3,
+      "pf": 0.23,
+      "avgNetR": -0.237
+    },
+    "2 ATR": {
+      "trades": 6549,
+      "stoppedOut": 5,
+      "stopRatePct": 0.1,
+      "noiseStopPctOfStops": 60,
+      "n": 6549,
+      "win": 20,
+      "pf": 0.2,
+      "avgNetR": -0.206
+    }
+  },
+  "examples": {
+    "TREND_AGAINST": {
+      "trade": "ADANIENT SELL 2026-07-14 09:30",
+      "netR": -0.632,
+      "lines": [
+        "SELL at 09:30 (morning), held 1 bars (5 min), result -0.48R via VWAP_BREACH_EXIT.",
+        "Context: entry was with VWAP (-0.65 ATR away); 1.53 ATR from the day low; patterns on the signal bar: BEAR_ENGULF, INSIDE_BAR.",
+        "Path: best move 0.08R after 0 min, worst -0.78R; target needed 1.67R and was never reached.",
+        "Cause TREND AGAINST: price never gave more than 0.08R and moved steadily to the stop. The signal direction was wrong for this session."
+      ]
+    },
+    "TIME_DECAY": {
+      "trade": "ADANIENT BUY 2026-07-15 09:35",
+      "netR": -0.539,
+      "lines": [
+        "BUY at 09:35 (morning), held 5 bars (25 min), result -0.39R via TIME_DECAY_TIMEOUT.",
+        "Context: entry was with VWAP (1.21 ATR away); 0.21 ATR from the day high.",
+        "Path: best move 0.04R after 15 min, worst -0.52R; target needed 1.67R and was never reached.",
+        "Cause TIME DECAY: nothing happened fast enough (best move only 0.04R), so the time stop closed it at -0.39R. Also present: TREND_AGAINST."
+      ]
+    },
+    "NOISE_STOP": {
+      "trade": "ADANIENT SELL 2026-07-16 09:40",
+      "netR": -1.178,
+      "lines": [
+        "SELL at 09:40 (morning), held 3 bars (15 min), result -1.03R via VWAP_BREACH_EXIT.",
+        "Context: entry was with VWAP (-2.01 ATR away); -0.02 ATR from the day low.",
+        "Path: best move 0.02R after 0 min, worst -0.97R; target needed 1.67R and was never reached; price was choppy.",
+        "Cause NOISE STOP: the stop was touched by a wick, then price recovered. The stop was probably too tight for this volatility. Also present: LATE_ENTRY."
+      ]
+    },
+    "OTHER": {
+      "trade": "ADANIENT BUY 2026-07-17 09:30",
+      "netR": -0.536,
+      "lines": [
+        "BUY at 09:30 (morning), held 2 bars (10 min), result -0.38R via VWAP_BREACH_EXIT.",
+        "Context: entry was with VWAP (1.36 ATR away); 0.17 ATR from the day high.",
+        "Path: best move 1.45R after 0 min, worst -0.38R; target needed 1.67R and was never reached.",
+        "No single cause stands out; treat as a normal losing trade."
+      ]
+    },
+    "LATE_ENTRY": {
+      "trade": "ADANIENT SELL 2026-07-23 13:35",
+      "netR": -1.215,
+      "lines": [
+        "SELL at 13:35 (afternoon), held 1 bars (5 min), result -1.06R via STOP_LOSS_HIT.",
+        "Context: entry was with VWAP (-6.41 ATR away); 0.47 ATR from the day low; patterns on the signal bar: INSIDE_BAR.",
+        "Path: best move 0.25R after 0 min, worst -1.71R; target needed 1.67R and was never reached.",
+        "Cause LATE ENTRY: price was already 6.41 ATR from VWAP at entry, so it was chasing a stretched move. Also present: TREND_AGAINST."
+      ]
+    },
+    "GAP": {
+      "trade": "ADANIPORTS SELL 2026-10-08 10:40",
+      "netR": -2.11,
+      "lines": [
+        "SELL at 10:40 (morning), held 2 bars (10 min), result -1.96R via VWAP_BREACH_EXIT.",
+        "Context: entry was with VWAP (-2.51 ATR away); 0.59 ATR from the day low; patterns on the signal bar: SHOOTING_PIN.",
+        "Path: best move 0.36R after 0 min, worst -2.05R; target needed 1.67R and was never reached.",
+        "Cause GAP: price jumped through the stop, so the loss is bigger than 1R. No stop placement avoids that. Also present: LATE_ENTRY."
+      ]
+    }
+  }
+}

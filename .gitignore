@@ -6,3 +6,6 @@ node_modules
 # Market data, recordings and personal journal (large / private). Regenerate with the npm scripts.
 /data/
 *.tmp
+
+# esbuild output of analysis scripts
+analysis/.build/
