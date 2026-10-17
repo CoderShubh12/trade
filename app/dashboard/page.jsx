@@ -94,9 +94,18 @@ const by = (arr, f) => {
 export default function Hundred() {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
+  const [health, setHealth] = useState(null);
   useEffect(() => {
     let off = false;
     const load = () => fetch('/api/journal', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off) { setItems(j.items || []); setErr(''); } }).catch((e) => { if (!off) setErr(String(e.message || e)); });
+    load();
+    const t = setInterval(load, 30000);
+    return () => { off = true; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let off = false;
+    const load = () => fetch('/api/health', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off && j.success) setHealth(j); }).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => { off = true; clearInterval(t); };
@@ -130,6 +139,18 @@ export default function Hundred() {
         <h1 style={{ fontSize: 18 }}>100-Trade Paper Gate</h1>
         <Link href="/" style={{ color: 'var(--accent-blue)', fontSize: 13 }}>← Terminal</Link>
       </div>
+
+      {health ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }}>
+          {[
+            [`Feed ${health.health?.level || '?'}`, health.health?.level === 'ok' ? 'var(--accent-green)' : health.health?.level === 'degraded' ? 'var(--accent-yellow)' : 'var(--accent-red)', (health.health?.reasons || []).join(' · ')],
+            [`Journal ${health.integrity?.ok ? 'ok' : 'ERRORS'}${health.integrity?.counts?.warn ? ` · ${health.integrity.counts.warn} warn` : ''}`, health.integrity?.ok ? 'var(--accent-green)' : 'var(--accent-red)', (health.integrity?.issues || []).slice(0, 3).map((i) => `${i.code} ${i.symbol}`).join(' · ')],
+            [`Backups ${health.backup?.count ?? 0}`, (health.backup?.count || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)', health.backup?.latest?.['paper-journal'] || 'none yet'],
+          ].map(([label, color, tip]) => (
+            <span key={label} title={tip} style={{ padding: '3px 10px', borderRadius: 12, border: `1px solid ${color}`, color }}>{label}</span>
+          ))}
+        </div>
+      ) : null}
 
       <Card title="PROGRESS">
         <div style={{ fontSize: 28, fontWeight: 700 }}>{all.n} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>/ {GATE.n} closed paper trades</span></div>
