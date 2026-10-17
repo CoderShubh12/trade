@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "selftest": "node --no-warnings scripts/selftest.mjs",
     "history": "node --no-warnings --env-file=.env.local --import ./scripts/register.mjs scripts/fetch-history.mjs",
     "experiments": "node --no-warnings --import ./scripts/register.mjs scripts/experiments.mjs",
     "history:daily": "node --no-warnings --env-file=.env.local --import ./scripts/register.mjs scripts/fetch-daily.mjs",

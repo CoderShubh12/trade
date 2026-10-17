@@ -1,0 +1,234 @@
+// scripts/selftest.mjs : offline self-test of the parts that protect the paper-trading record and decide calls/exits.
+//   node scripts/selftest.mjs        (or: npm run selftest)
+// No network, no Angel, no Groq. The journal test runs in a temp folder, so your real data/ is never touched.
+// Exit code 1 if anything fails. Run it after every change to lib/.
+import "./register.mjs"; // lets plain node resolve the extensionless imports used inside lib/
+import os from "os";
+import fs from "fs";
+import path from "path";
+
+// The backup bot must not write snapshots of the REAL journal while we test: mark it busy before it is imported.
+globalThis.__backupBot = { last: 0, lastDay: "", busy: true };
+
+const results = [];
+async function test(name, fn) {
+  try { await fn(); results.push([name, true]); console.log(`PASS  ${name}`); }
+  catch (e) { results.push([name, false]); console.log(`FAIL  ${name}\n        ${String(e && e.message ? e.message : e)}`); }
+}
+const eq = (a, b, msg) => { if (a !== b) throw new Error(`${msg || "expected"} ${JSON.stringify(b)} but got ${JSON.stringify(a)}`); };
+const ok = (c, msg) => { if (!c) throw new Error(msg || "assertion failed"); };
+// IST clock -> epoch ms (IST = UTC+5:30)
+const ist = (y, mo, d, h, mi = 0) => Date.UTC(y, mo - 1, d, h, mi) - 330 * 60000;
+
+const { getIstParts, getTradeWindowStatus } = await import("../lib/sessionUtils.js");
+const { evaluateTradeSetup, monitorActiveTrade } = await import("../lib/tradeManager.js");
+const SM = await import("../lib/signalMemory.js");
+const { detectChartPatterns } = await import("../lib/chartPatterns.js");
+const { autopsyTrade } = await import("../lib/autopsy.js");
+const { checkJournal, evaluateHealth } = await import("../lib/safetyBots.js");
+const { buildCompositeScore } = await import("../lib/signalEngine.js");
+
+// ---------------------------------------------------------------- IST + trade window
+await test("IST helper: UTC time maps to the right IST date and clock", () => {
+  const a = getIstParts(Date.UTC(2026, 9, 14, 3, 45));        // 03:45 UTC = 09:15 IST
+  eq(a.dateStr, "2026-10-14", "date"); eq(a.hhmm, 915, "hhmm");
+  const b = getIstParts(Date.UTC(2026, 9, 14, 19, 0));        // 19:00 UTC = 00:30 IST next day
+  eq(b.dateStr, "2026-10-15", "date rolls over after 18:30 UTC"); eq(b.hhmm, 30, "hhmm");
+  eq(getIstParts(ist(2026, 10, 17, 10)).day, 6, "17 Oct 2026 is a Saturday");
+});
+await test("Trade window: 09:30-11:30 and 13:30-14:45 only, nothing from 15:15", () => {
+  const w = (h, m) => getTradeWindowStatus(ist(2026, 10, 14, h, m)).allowed;
+  eq(w(9, 20), false, "09:20"); eq(w(9, 30), true, "09:30"); eq(w(11, 30), true, "11:30"); eq(w(11, 31), false, "11:31");
+  eq(w(12, 30), false, "12:30"); eq(w(13, 30), true, "13:30"); eq(w(14, 45), true, "14:45"); eq(w(14, 46), false, "14:46"); eq(w(15, 15), false, "15:15");
+});
+
+// ---------------------------------------------------------------- exit logic (monitorActiveTrade)
+const mk = (action) => action === "BUY"
+  ? { action, entry: 100, stopLoss: 98.5, target1: 103, target2: 105, t1Reached: false, maxTime: ist(2026, 10, 14, 10, 25) }
+  : { action, entry: 100, stopLoss: 101.5, target1: 97, target2: 95, t1Reached: false, maxTime: ist(2026, 10, 14, 10, 25) };
+const T0 = ist(2026, 10, 14, 10, 5);
+await test("Exit BUY: price at/below the stop closes the trade as STOP_LOSS_HIT", () => {
+  const r = monitorActiveTrade(mk("BUY"), 98.4, 95, T0);
+  ok(r && r.exit && r.reason === "STOP_LOSS_HIT", JSON.stringify(r));
+});
+await test("Exit BUY: price between stop and target keeps the trade open", () => {
+  const r = monitorActiveTrade(mk("BUY"), 101, 95, T0);
+  ok(!r || !r.exit, JSON.stringify(r));
+});
+await test("Exit BUY: T1 moves the stop to cost (entry +0.1%), then falling back exits at TRAILING_SL_HIT", () => {
+  const tr = mk("BUY");
+  const a = monitorActiveTrade(tr, 103.2, 95, T0);
+  ok(a && a.isPartial && !a.exit, "T1 should be a partial, not an exit");
+  eq(tr.t1Reached, true, "t1Reached"); eq(tr.stopLoss, 100.1, "stop at cost");
+  const b = monitorActiveTrade(tr, 100.0, 95, T0 + 60000);
+  ok(b && b.exit && b.reason === "TRAILING_SL_HIT", JSON.stringify(b));
+});
+await test("Exit BUY: T2 closes the trade", () => {
+  const r = monitorActiveTrade(mk("BUY"), 105.1, 95, T0);
+  ok(r && r.exit && r.reason === "TARGET_2_HIT", JSON.stringify(r));
+});
+await test("Exit SELL mirrors BUY: stop, T1->cost, T2", () => {
+  const r1 = monitorActiveTrade(mk("SELL"), 101.6, 110, T0); ok(r1 && r1.exit && r1.reason === "STOP_LOSS_HIT", JSON.stringify(r1));
+  const tr = mk("SELL"); const a = monitorActiveTrade(tr, 96.9, 110, T0);
+  ok(a && a.isPartial, "T1 partial"); eq(tr.stopLoss, 99.9, "stop at cost");
+  const r2 = monitorActiveTrade(mk("SELL"), 94.9, 110, T0); ok(r2 && r2.exit && r2.reason === "TARGET_2_HIT", JSON.stringify(r2));
+});
+await test("Exit: 25-minute time stop (TIME_DECAY_TIMEOUT)", () => {
+  const r = monitorActiveTrade(mk("BUY"), 100.5, 95, ist(2026, 10, 14, 10, 26));
+  ok(r && r.exit && r.reason === "TIME_DECAY_TIMEOUT", JSON.stringify(r));
+});
+await test("Exit: 15:15 square-off beats everything else", () => {
+  const tr = mk("BUY"); tr.maxTime = ist(2026, 10, 14, 15, 40);
+  const r = monitorActiveTrade(tr, 101, 95, ist(2026, 10, 14, 15, 15));
+  ok(r && r.exit && r.reason === "MARKET_CLOSE_SQUAREOFF", JSON.stringify(r));
+});
+await test("Exit: VWAP breach (0.05% buffer) exits a BUY below VWAP and a SELL above VWAP", () => {
+  const b = monitorActiveTrade(mk("BUY"), 99.0, 100, T0); ok(b && b.exit && b.reason === "VWAP_BREACH_EXIT", JSON.stringify(b));
+  const s = monitorActiveTrade(mk("SELL"), 101.0, 100, T0); ok(s && s.exit && s.reason === "VWAP_BREACH_EXIT", JSON.stringify(s));
+  const near = monitorActiveTrade(mk("BUY"), 99.97, 100, T0); ok(!near || !near.exit, "inside the buffer must not exit");
+});
+
+// ---------------------------------------------------------------- entry rules
+const candle = { time: 1, open: 100, high: 100.5, low: 99.5, close: 100, volume: 1000 };
+await test("Entry: score >= 65 gives BUY with SL 1.2 ATR, T1 2 ATR, T2 3.5 ATR, 25-min max time", async () => {
+  const now = ist(2026, 10, 14, 10, 0);
+  const s = await evaluateTradeSetup(70, "NEUTRAL", candle, 100, 2, { nowMs: now, symbol: "T" });
+  eq(s.action, "BUY", "action"); eq(s.stopLoss, 97.6, "sl"); eq(s.target1, 104, "t1"); eq(s.target2, 107, "t2"); eq(s.maxTime, now + 25 * 60000, "maxTime");
+});
+await test("Entry: score <= -65 gives SELL; Nifty bias against the side blocks the call", async () => {
+  const now = ist(2026, 10, 14, 10, 0);
+  eq((await evaluateTradeSetup(-70, "NEUTRAL", candle, 100, 2, { nowMs: now })).action, "SELL", "sell");
+  eq((await evaluateTradeSetup(70, "BEARISH", candle, 100, 2, { nowMs: now })).action, "WAIT", "buy vs bearish nifty");
+  eq((await evaluateTradeSetup(-70, "BULLISH", candle, 100, 2, { nowMs: now })).action, "WAIT", "sell vs bullish nifty");
+});
+await test("Entry: weak score or outside the window gives WAIT", async () => {
+  eq((await evaluateTradeSetup(60, "NEUTRAL", candle, 100, 2, { nowMs: ist(2026, 10, 14, 10, 0) })).action, "WAIT", "weak score");
+  eq((await evaluateTradeSetup(80, "NEUTRAL", candle, 100, 2, { nowMs: ist(2026, 10, 14, 12, 30) })).action, "WAIT", "midday");
+});
+
+// ---------------------------------------------------------------- signal memory
+await test("Signal memory: one call per setup, re-arms below 50 or on a flip", () => {
+  let m = SM.newSignalMemory("d1");
+  ok(SM.checkSignalAllowed(m, 0).allowed, "first call allowed");
+  m = SM.recordEntry(m, "BUY");
+  ok(!SM.checkSignalAllowed(m, 0).allowed, "second call on the same setup blocked");
+  m = SM.observeScore(m, 80, "d1"); ok(!m.armed, "score still high: stays disarmed");
+  m = SM.observeScore(m, 40, "d1"); ok(m.armed, "score cooled below 50: re-armed");
+  m = SM.recordEntry(m, "BUY"); m = SM.observeScore(m, -70, "d1"); ok(m.armed, "flip to the other side re-arms");
+});
+await test("Signal memory: 30-min cooldown after an exit, max 3 calls per stock per day, new day resets", () => {
+  let m = SM.newSignalMemory("d1");
+  m = SM.recordExit(m, 1000000);
+  ok(!SM.checkSignalAllowed(m, 1000000 + 29 * 60000).allowed, "29 min after exit blocked");
+  ok(SM.checkSignalAllowed(m, 1000000 + 31 * 60000).allowed, "31 min after exit allowed");
+  let c = SM.newSignalMemory("d1");
+  for (let i = 0; i < 3; i++) { c = SM.recordEntry(c, "BUY"); c = SM.observeScore(c, 10, "d1"); }
+  ok(!SM.checkSignalAllowed(c, 0).allowed, "4th call blocked");
+  const n = SM.observeScore(c, 10, "d2"); eq(n.entries, 0, "new day starts fresh"); ok(SM.checkSignalAllowed(n, 0).allowed, "allowed on the new day");
+});
+
+// ---------------------------------------------------------------- composite score sanity
+await test("Composite score: empty input is 0, a long uptrend stays inside -100..100", () => {
+  eq(buildCompositeScore([], 5, true).score, 0, "empty");
+  const c = []; let p = 100;
+  for (let d = 0; d < 3; d++) for (let i = 0; i < 75; i++) { const o = p; p += 0.05 + (i % 3 ? 0.02 : -0.01); const m = 9 * 60 + 15 + i * 5; c.push({ time: Math.floor(ist(2026, 10, 12 + d, 0, 0) / 1000) + m * 60 - 0, date: `2026-10-${12 + d}`, clock: `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`, open: o, high: p + 0.1, low: o - 0.1, close: p, volume: 1000 + i }); }
+  const s = buildCompositeScore(c, 5, true).score;
+  ok(Number.isFinite(s) && s >= -100 && s <= 100, `score ${s}`);
+});
+
+// ---------------------------------------------------------------- journal store + integrity
+await test("Journal store: same call is stored once, ids merge, different clock = new row (temp folder)", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nse-selftest-"));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    const J = await import("../lib/journalStore.js");
+    const base = { id: "a1", symbol: "SBIN", side: "BUY", dateStr: "2026-10-14", entryClock: "10:00", entry: 100, stopLoss: 98.8, initialSl: 98.8, target1: 102.4, exitPrice: null };
+    await J.upsertCall(base);
+    await J.upsertCall({ ...base, id: "a2" });                              // same call, different id (double-fire)
+    eq((await J.readJournal()).length, 1, "double fire collapsed to one row");
+    await J.upsertCall({ ...base, exitPrice: 102.4, exitClock: "10:20", reason: "T1", r: 2 });
+    const l = await J.readJournal(); eq(l.length, 1, "update keeps one row"); eq(l[0].exitPrice, 102.4, "merged exit"); eq(l[0].id, "a1", "first id kept");
+    await J.upsertCall({ ...base, id: "b1", entryClock: "10:30" });
+    eq((await J.readJournal()).length, 2, "different entry clock is a new call");
+    // parallel writers must not lose rows
+    await Promise.all(Array.from({ length: 12 }, (_, i) => J.upsertCall({ ...base, id: `p${i}`, entryClock: `11:${String(i).padStart(2, "0")}` })));
+    eq((await J.readJournal()).length, 14, "12 parallel writes all kept");
+    ok(fs.existsSync(path.join(dir, "data", "paper-journal.json")), "file written inside the temp folder");
+  } finally {
+    await new Promise((r) => setTimeout(r, 150)); // let the throttled backup finish
+    process.chdir(cwd);
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});
+await test("Integrity checker: flags duplicate ids, illogical levels, exit before entry, wrong R; accepts a clean row", () => {
+  const good = { id: "g", symbol: "X", side: "BUY", token: "1", dateStr: "2026-10-14", entryClock: "10:00", entry: 100, initialSl: 98.8, target1: 102.4, exitPrice: 102.4, exitClock: "10:20", reason: "T1", r: 2 };
+  const clean = checkJournal([good], ist(2026, 10, 14, 16));
+  eq(clean.counts.error, 0, "clean row has no errors");
+  const codes = (rows) => checkJournal(rows, ist(2026, 10, 14, 16)).issues.map((i) => i.code);
+  ok(codes([good, { ...good, entryClock: "10:05" }]).includes("DUP_ID"), "DUP_ID");
+  ok(codes([{ ...good, id: "h", initialSl: 101 }]).includes("BAD_LEVELS"), "BAD_LEVELS (BUY with stop above entry)");
+  ok(codes([{ ...good, id: "i", exitClock: "09:50" }]).includes("EXIT_BEFORE_ENTRY"), "EXIT_BEFORE_ENTRY");
+  ok(codes([{ ...good, id: "j", r: -1 }]).includes("R_MISMATCH"), "R_MISMATCH");
+  ok(codes([{ ...good, id: "k", exitPrice: null, dateStr: "2026-10-13" }]).includes("STALE_OPEN"), "STALE_OPEN");
+});
+await test("Health rules: closed market is ok, 3 candle failures or an old tick is down, integrity errors block", () => {
+  const base = { marketOpen: true, candleFails: 0, candlePauseSec: 0, quoteError: "", tickAgeSec: 3, integrityErrors: 0 };
+  eq(evaluateHealth(base).level, "ok", "healthy");
+  eq(evaluateHealth({ ...base, marketOpen: false, tickAgeSec: null, candleFails: 5 }).level, "ok", "closed market");
+  eq(evaluateHealth({ ...base, candleFails: 3 }).level, "down", "3 fails");
+  eq(evaluateHealth({ ...base, tickAgeSec: 90 }).level, "down", "stale tick");
+  eq(evaluateHealth({ ...base, tickAgeSec: 30 }).level, "degraded", "slow tick");
+  eq(evaluateHealth({ ...base, integrityErrors: 1, marketOpen: false }).level, "down", "integrity error blocks even when closed");
+});
+
+// ---------------------------------------------------------------- chart patterns
+let TT = 1783914300;
+const bar = (o, c, w = 0.15, v = 100000) => ({ time: (TT += 300), date: "2026-10-12", clock: "", open: o, high: Math.max(o, c) + w, low: Math.min(o, c) - w, close: c, volume: v });
+const wave = (start, wps, per = 6) => { const out = [bar(start, start)]; let p = start; for (const w of wps) { for (let i = 1; i <= per; i++) out.push(bar(out[out.length - 1].close, p + ((w - p) * i) / per)); p = w; } return out; };
+const warm = () => Array.from({ length: 30 }, (_, i) => bar(100 + (i % 2 ? 0.3 : -0.3), 100 + (i % 2 ? -0.3 : 0.3)));
+const firstFire = (c, id) => { for (let n = 30; n <= c.length; n++) { const r = detectChartPatterns(c.slice(0, n)).filter((x) => x.id === id); if (r.length) return { n, dir: r[0].dir }; } return null; };
+await test("Chart patterns: double top fires short, double bottom fires long, only on the breakout bar", () => {
+  const top = warm().concat(wave(100, [106, 102, 106, 98, 97, 96], 7)); const a = firstFire(top, "dbl_top");
+  ok(a && a.dir === -1, "double top short"); ok(a.n < top.length, "fires before the end of the path");
+  const bot = warm().concat(wave(100, [94, 98, 94, 102, 103, 104], 7)); const b = firstFire(bot, "dbl_bottom");
+  ok(b && b.dir === 1, "double bottom long");
+});
+await test("Chart patterns: no look-ahead (appending later bars does not change an earlier result)", () => {
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const noise = []; let px = 100; for (let i = 0; i < 300; i++) { const o = px; px += (rnd() - 0.5) * 0.8; noise.push(bar(o, px, 0.1 + rnd() * 0.2)); }
+  for (let n = 40; n < 280; n += 11) eq(JSON.stringify(detectChartPatterns(noise.slice(0, n))), JSON.stringify(detectChartPatterns(noise.slice(0, 300).slice(0, n))), `bar ${n}`);
+});
+
+// ---------------------------------------------------------------- autopsy classification
+const clk = (i) => { const m = 9 * 60 + 15 + i * 5; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+const ab = (date, i, o, h, l, c) => ({ time: i, date, clock: clk(i), open: o, high: h, low: l, close: c, volume: 1000 });
+const day = (preLevel, path2) => {
+  const c = [];
+  for (let i = 0; i < 75; i++) c.push(ab("2026-10-13", i, 100, 100.4, 99.6, 100));
+  for (let i = 0; i < 15; i++) c.push(ab("2026-10-14", i, preLevel, preLevel + 0.4, preLevel - 0.4, preLevel));
+  path2.forEach((p, k) => c.push(ab("2026-10-14", 15 + k, ...p)));
+  const last = path2[path2.length - 1][3];
+  for (let i = 15 + path2.length; i < 75; i++) c.push(ab("2026-10-14", i, last, last + 0.2, last - 0.2, last));
+  return c;
+};
+const tradeBase = { id: "t", symbol: "T", side: "BUY", dateStr: "2026-10-14", entryClock: "10:30", entry: 100, stopLoss: 99, initialSl: 99, target1: 102 };
+await test("Autopsy: a stop hit by a wick that recovers is NOISE_STOP; a straight slide is TREND_AGAINST; a jump through the stop is GAP", () => {
+  const noise = autopsyTrade({ ...tradeBase, exitPrice: 99, exitClock: clk(16), reason: "STOP" }, day(100, [[100, 100.3, 99.7, 99.9], [99.9, 100, 98.9, 99.6], [99.6, 100.8, 99.5, 100.7], [100.7, 102.5, 100.6, 102.4]]));
+  eq(noise.cause, "NOISE_STOP", "noise");
+  const trend = autopsyTrade({ ...tradeBase, exitPrice: 99, exitClock: clk(17), reason: "STOP" }, day(100, [[100, 100.1, 99.6, 99.7], [99.7, 99.8, 99.3, 99.4], [99.4, 99.5, 98.9, 98.8], [98.8, 98.9, 98.2, 98.3]]));
+  eq(trend.cause, "TREND_AGAINST", "trend");
+  const gap = autopsyTrade({ ...tradeBase, exitPrice: 97.5, exitClock: clk(16), reason: "STOP" }, day(100, [[100, 100.2, 99.8, 100], [97.5, 97.8, 97.2, 97.4], [97.4, 97.6, 97.2, 97.5]]));
+  eq(gap.cause, "GAP", "gap");
+});
+await test("Autopsy: a win has no loss cause, and a time-stop loss is TIME_DECAY, never a noise stop", () => {
+  const win = autopsyTrade({ ...tradeBase, exitPrice: 102, exitClock: clk(17), reason: "T1_SERVER" }, day(100, [[100, 100.6, 99.9, 100.5], [100.5, 101.2, 100.4, 101.1], [101.1, 102.2, 101, 102.1]]));
+  eq(win.outcome, "WIN", "win"); eq(win.cause, "NONE", "no cause");
+  const flat = []; for (let k = 0; k < 6; k++) flat.push([99.95, 100.2, 99.75, 99.95]);
+  const dec = autopsyTrade({ ...tradeBase, exitPrice: 99.9, exitClock: clk(20), reason: "TIME_DECAY_TIMEOUT" }, day(100, flat));
+  eq(dec.cause, "TIME_DECAY", "decay"); eq(dec.noiseStop, false, "not a noise stop");
+});
+
+const failed = results.filter((r) => !r[1]);
+console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} FAILED: ${failed.map((f) => f[0]).join(" | ")}` : ""}`);
+process.exit(failed.length ? 1 : 0);
