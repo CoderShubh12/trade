@@ -25,7 +25,7 @@ const { evaluateTradeSetup, monitorActiveTrade } = await import("../lib/tradeMan
 const SM = await import("../lib/signalMemory.js");
 const { detectChartPatterns } = await import("../lib/chartPatterns.js");
 const { autopsyTrade } = await import("../lib/autopsy.js");
-const { checkJournal, evaluateHealth } = await import("../lib/safetyBots.js");
+const { checkJournal, evaluateHealth, checkExposure, EXPOSURE } = await import("../lib/safetyBots.js");
 const { buildCompositeScore } = await import("../lib/signalEngine.js");
 
 // ---------------------------------------------------------------- IST + trade window
@@ -180,6 +180,50 @@ await test("Health rules: closed market is ok, 3 candle failures or an old tick 
   eq(evaluateHealth({ ...base, tickAgeSec: 90 }).level, "down", "stale tick");
   eq(evaluateHealth({ ...base, tickAgeSec: 30 }).level, "degraded", "slow tick");
   eq(evaluateHealth({ ...base, integrityErrors: 1, marketOpen: false }).level, "down", "integrity error blocks even when closed");
+});
+
+// ---------------------------------------------------------------- exposure guard
+await test("Exposure guard: max 2 open, max 2 in one direction, day cap 6", () => {
+  const b = { side: "BUY", open: [], callsToday: 0, stockResults: [], niftyPct: 0 };
+  eq(checkExposure(b).allowed, true, "empty book");
+  eq(checkExposure({ ...b, open: [{ action: "BUY" }] }).allowed, true, "1 open");
+  const two = checkExposure({ ...b, open: [{ action: "BUY" }, { action: "BUY" }] }); eq(two.allowed, false, "2 open"); eq(two.code, "MAX_OPEN", "code");
+  eq(checkExposure({ ...b, side: "SELL", open: [{ action: "BUY" }, { action: "BUY" }] }).code, "MAX_OPEN", "max open applies to the opposite side too");
+  eq(checkExposure({ ...b, callsToday: 5 }).allowed, true, "5 calls so far");
+  eq(checkExposure({ ...b, callsToday: 6 }).code, "DAY_CAP", "6th is the last allowed, 7th blocked");
+  const r2 = { ...EXPOSURE, MAX_OPEN: 3 };                       // same-direction rule on its own
+  eq(checkExposure({ ...b, open: [{ action: "BUY" }, { action: "BUY" }] }, r2).code, "SAME_DIR", "2 BUY open blocks a 3rd BUY");
+  eq(checkExposure({ ...b, side: "SELL", open: [{ action: "BUY" }, { action: "BUY" }] }, r2).allowed, true, "a SELL is fine against 2 BUY");
+});
+await test("Exposure guard: 3 losses in a row on a stock today block it; a win in between does not", () => {
+  const b = { side: "BUY", open: [], callsToday: 3, niftyPct: 0 };
+  eq(checkExposure({ ...b, stockResults: ["L", "L", "L"] }).code, "STOCK_STREAK", "LLL");
+  eq(checkExposure({ ...b, stockResults: ["W", "L", "L"] }).allowed, true, "WLL");
+  eq(checkExposure({ ...b, stockResults: ["L", "L", "W", "L", "L"] }).allowed, true, "LLWLL");
+  eq(checkExposure({ ...b, stockResults: ["W", "L", "L", "L"] }).code, "STOCK_STREAK", "last three are losses");
+});
+await test("Exposure guard: calls against a strong Nifty move (score beyond +/-25 = 0.5%) are blocked", () => {
+  const b = { open: [], callsToday: 0, stockResults: [] };
+  eq(checkExposure({ ...b, side: "BUY", niftyPct: -0.49 }).allowed, true, "BUY at -0.49%");
+  eq(checkExposure({ ...b, side: "BUY", niftyPct: -0.5 }).code, "NIFTY_AGAINST", "BUY at -0.5%");
+  eq(checkExposure({ ...b, side: "SELL", niftyPct: 0.6 }).code, "NIFTY_AGAINST", "SELL at +0.6%");
+  eq(checkExposure({ ...b, side: "SELL", niftyPct: -0.9 }).allowed, true, "SELL with a falling Nifty is fine");
+  eq(checkExposure({ ...b, side: "BUY", niftyPct: null }).allowed, true, "unknown Nifty does not block");
+});
+await test("Exposure guard: replay of a hand-built day keeps the book inside the limits", () => {
+  const open = []; let calls = 0; const blocked = [];
+  const tryOpen = (side, res = []) => { const r = checkExposure({ side, open, callsToday: calls, stockResults: res, niftyPct: 0 }); if (r.allowed) { open.push({ action: side }); calls++; } else blocked.push(r.code); return r.allowed; };
+  eq(tryOpen("BUY"), true, "1st"); eq(tryOpen("BUY"), true, "2nd"); eq(tryOpen("SELL"), false, "3rd blocked by MAX_OPEN"); open.length = 0;
+  for (let i = 0; i < 4; i++) { tryOpen("BUY"); open.length = 0; }
+  eq(calls, 6, "6 calls opened"); eq(tryOpen("BUY"), false, "7th call refused"); eq(blocked[blocked.length - 1], "DAY_CAP", "refused by the day cap"); eq(calls, 6, "still 6");
+});
+await test("Exposure guard is wired into the engine BEFORE a call is recorded, and only blocks new calls", () => {
+  const src = fs.readFileSync(new URL("../lib/serverEngine.js", import.meta.url), "utf8");
+  const g = src.indexOf("checkExposure({"), r = src.indexOf("E.mem[token] = recordEntry(");
+  ok(g > 0 && r > 0 && g < r, "guard must run before recordEntry");
+  ok(/if \(!ex\.allowed\)[\s\S]{0,260}return;/.test(src), "a blocked call must return");
+  const mon = src.slice(src.indexOf("async function monitor"), src.indexOf("async function newsTag"));
+  ok(!mon.includes("checkExposure"), "exits/monitoring are never gated by the guard");
 });
 
 // ---------------------------------------------------------------- chart patterns
