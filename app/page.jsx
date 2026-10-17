@@ -1637,6 +1637,22 @@ export default function DashboardPage() {
           >
             🤖 BOTS
           </Link>
+
+          <Link
+            href="/autopsy"
+            style={{
+              fontSize: "0.72rem",
+              padding: "4px 10px",
+              borderRadius: 4,
+              background: "rgba(91, 140, 255, 0.12)",
+              color: "#5B8CFF",
+              border: "1px solid rgba(91, 140, 255, 0.3)",
+              textDecoration: "none",
+              fontWeight: 700,
+            }}
+          >
+            🔬 AUTOPSY
+          </Link>
         </div>
 
         <div

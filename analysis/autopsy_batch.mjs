@@ -144,7 +144,7 @@ for (const file of files) {
     for (const t of trades) {
       if (m === 1.2) {
         const rep = autopsyTrade(t.rec, c.slice(t.lo, t.hi + 1));
-        if (!rep.error) base.push({ ...t, rep });
+        if (!rep.error) base.push({ ...t, rep, c });
       } else {
         if (t.why === "STOP_LOSS_HIT") { const rep = autopsyTrade(t.rec, c.slice(t.lo, t.hi + 1)); t.noise = !rep.error && rep.noiseStop; }
         variants[m].push(t);
@@ -206,6 +206,26 @@ for (const m of SL_VARIANTS) {
 S.examples = {};
 for (const x of losses) if (!S.examples[x.rep.cause]) S.examples[x.rep.cause] = { trade: `${x.sym} ${x.rep.side} ${x.rep.date} ${x.rep.entryClock}`, netR: R(x.netR), lines: x.rep.explain };
 
+// Chart-ready sample trades (one per loss cause + one winner) so /autopsy can draw real replayed examples. Labelled as simulation there.
+const dayChart = (c, rep) => {
+  const day = c.filter((b) => b.date === rep.date);
+  let pv = 0, vv = 0;
+  const vwap = day.map((b) => { pv += ((b.high + b.low + b.close) / 3) * b.volume; vv += b.volume; return vv > 0 ? +(pv / vv).toFixed(2) : null; });
+  const clocks = day.map((b) => b.clock);
+  const ei = Math.max(0, clocks.findIndex((x) => x >= rep.entryClock));
+  let xi = clocks.length - 1; for (let i = 0; i < clocks.length; i++) if (clocks[i] <= rep.exitClock) xi = i;
+  return { bars: day.map((b) => [b.clock, b.open, b.high, b.low, b.close]), vwap, entryIdx: ei, exitIdx: Math.max(ei, xi) };
+};
+const pick = [];
+const seen = new Set();
+for (const x of base) {
+  const key = x.rep.outcome === "WIN" ? "WIN" : x.rep.cause;
+  if (seen.has(key)) continue;
+  if (x.rep.date < dates[Math.floor(dates.length * 0.5)]) continue; // take examples from the later part of the history
+  seen.add(key);
+  pick.push({ ...x.rep, source: "simulation replay (not a journal trade)", levels: { entry: x.rec.entry, stop: x.rec.initialSl, t1: x.rec.target1, exit: x.rec.exitPrice }, exitReason: x.why, netR: R(x.netR), chart: dayChart(x.c, x.rep) });
+}
+fs.writeFileSync("analysis/autopsy_samples.json", JSON.stringify(pick));
 fs.writeFileSync("analysis/autopsy_summary.json", JSON.stringify(S, null, 2));
 
 // ---------------- print ----------------
