@@ -22,6 +22,11 @@ import { autopsyTrade } from "../lib/autopsy.js";
 
 const DIR = process.argv[2] || "data/movers/5m";
 const HOLD = Number(process.env.HOLD_BARS) || 5; // time stop in 5m bars (5 = the terminal's 25 min). HOLD_BARS=12 node ... tests 60 min
+// What-if: VWAP_BUF_PCT=0.3 widens the VWAP-breach exit buffer from 0.05% to 0.3%; VWAP_BUF_PCT=off disables that exit. Baseline files are only written for the default settings.
+const VB = process.env.VWAP_BUF_PCT === "off" ? Infinity : Number(process.env.VWAP_BUF_PCT) || 0.05;
+// More what-ifs: MIN_SCORE=75 only takes calls with |score| >= 75 (terminal uses 65); TGT_SCALE=1.5 multiplies T1/T2 distances (stop unchanged).
+const MIN_SCORE = Number(process.env.MIN_SCORE) || 65, TGT = Number(process.env.TGT_SCALE) || 1;
+const DEFAULTS = HOLD === 5 && VB === 0.05 && MIN_SCORE === 65 && TGT === 1;
 const RISK = 500, SLIP = 0.0003, CAP = 500000, WINDOW_BARS = 375, LOSS_COOL_MIN = 45;
 const cost = (n) => 40 + 0.00035 * n;
 const hhmmOf = (ms) => { const d = new Date(ms + 330 * 60000); return d.getUTCHours() * 100 + d.getUTCMinutes(); };
@@ -67,7 +72,7 @@ async function replay(sym, c, sc, slMult) {
     const now = c[i].time * 1000 + 300000;
     if (now < coolUntil) continue;
     mem = observeScore(mem, s.score, c[i].date);
-    if (Math.abs(s.score) < 65) continue;
+    if (Math.abs(s.score) < MIN_SCORE) continue;
     if (!checkSignalAllowed(mem, now).allowed) continue;
     if (s.atr === null) { s.atr = calculateATR(s.closed, 14); s.regime = detectMarketRegime(s.closed); }
     const setup = await evaluateTradeSetup(s.score, biasAt(c[i]), c[i], s.vwap, s.atr, { nowMs: now, bypassTimeWindow: false, useGroqValidation: false, symbol: sym, timeframe: "5", regime: s.regime });
@@ -79,7 +84,7 @@ async function replay(sym, c, sc, slMult) {
     const safeAtr = Math.abs(setup.entry - setup.stopLoss) / 1.2;
     const entry = c[e].open * (1 + SLIP * side);
     const stop0 = +(entry - side * slMult * safeAtr).toFixed(2);
-    const tr = { action: setup.action, entry, target1: +(entry + side * 2 * safeAtr).toFixed(2), target2: +(entry + side * 3.5 * safeAtr).toFixed(2), stopLoss: stop0, t1Reached: false, maxTime: now + HOLD * 5 * 60000 };
+    const tr = { action: setup.action, entry, target1: +(entry + side * 2 * TGT * safeAtr).toFixed(2), target2: +(entry + side * 3.5 * TGT * safeAtr).toFixed(2), stopLoss: stop0, t1Reached: false, maxTime: now + HOLD * 5 * 60000 };
 
     // walk the bars with the app's own monitorActiveTrade
     let px = null, why = "", xi = e, vp = 0, vv = 0;
@@ -87,7 +92,8 @@ async function replay(sym, c, sc, slMult) {
     for (let k = dayStart; k <= i; k++) { const t = (c[k].high + c[k].low + c[k].close) / 3; vp += t * c[k].volume; vv += c[k].volume; }
     for (let j = e; j < c.length && c[j].date === c[e].date; j++) {
       const b = c[j], t0 = b.time * 1000;
-      const vwap = vv > 0 ? vp / vv : entry;
+      const vwap0 = vv > 0 ? vp / vv : entry;
+      const vwap = VB === Infinity ? (side > 0 ? 1e-6 : 1e9) : vwap0 * (1 - side * (VB - 0.05) / 100); // value handed to monitorActiveTrade so its fixed 0.05% buffer becomes VB
       const pts = side > 0 ? [b.open, b.low, b.high, b.close] : [b.open, b.high, b.low, b.close];
       for (let p = 0; p < 4 && px === null; p++) {
         const st = monitorActiveTrade(tr, pts[p], vwap, p === 3 ? t0 + 299000 : p === 0 ? t0 : t0 + 60000 * p);
@@ -226,7 +232,7 @@ for (const x of base) {
   seen.add(key);
   pick.push({ ...x.rep, source: "simulation replay (not a journal trade)", levels: { entry: x.rec.entry, stop: x.rec.initialSl, t1: x.rec.target1, exit: x.rec.exitPrice }, exitReason: x.why, netR: R(x.netR), chart: dayChart(x.c, x.rep) });
 }
-if (HOLD === 5) { fs.writeFileSync("analysis/autopsy_samples.json", JSON.stringify(pick)); fs.writeFileSync("analysis/autopsy_summary.json", JSON.stringify(S, null, 2)); } // other hold times are what-if runs: never overwrite the baseline files
+if (DEFAULTS) { fs.writeFileSync("analysis/autopsy_samples.json", JSON.stringify(pick)); fs.writeFileSync("analysis/autopsy_summary.json", JSON.stringify(S, null, 2)); } // other hold times are what-if runs: never overwrite the baseline files
 
 // ---------------- print ----------------
 const P = (t, o) => { console.log(`\n${t}`); for (const [k, v] of Object.entries(o)) console.log("  " + k.padEnd(30), typeof v.n === "number" && "avgNetR" in v ? fmtRow(v) : JSON.stringify(v)); };

@@ -130,3 +130,7 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Best honest: "trend pullback (SMA50>SMA200, close<=EMA20, RSI14<45), stop 3 ATR, hold 40d": test +0.62%/trade PF 1.15, 6/8 yrs positive, beats control only ~0.5%. Below PF 1.3 gate.
 - Momentum (monthly top-K by 6m return): beats equal-weight by ~0.1-0.4%/month in both halves, but hit-rate 50-59% and survivorship bias (today's stock list) inflates it. Not tradable proof.
 - Verdict: still no validated edge. Daily timeframe is less bad than intraday (costs matter less).
+
+## High-ATR% intraday filter (MIN_ATRPCT env in analysis/autopsy_batch.mjs, with HOLD_BARS=12)
+- Filter does nothing until ATR% >= 0.4 (almost all 5m ATR is below it); at 0.45: n=290, PF 0.48 (test 0.57), -0.27R/trade; at 0.5: n=197, PF 0.35.
+- Best case still PF < 0.6 and net negative on both halves -> cost-aware filtering does not rescue the intraday rules. Gate (PF>=1.3) not met.
