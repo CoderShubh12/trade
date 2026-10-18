@@ -123,3 +123,10 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Tool vs hindsight: the tool's score (>= 65 on the side) was present before 14.3% of the trades that reached their target (85.7% missed). When the score was >= 65, 20.0% reached target vs 19.8% for a random bar (lift 1.01): the score adds no information here.
 - What was visible before the good trades the tool missed: nothing stands out (largest over-representation x1.14, calm ATR, volume spike, afternoon). Candle patterns and chart patterns: no edge either, in line with the earlier pattern backtest.
 - Conclusion: none of the standard indicators/patterns we have predicts a profitable 5m trade after costs; the loss is mostly cost drag (-0.5R/trade baseline). Next: volatility/cost-aware filtering (high ATR% only), other timeframe (daily/swing), more history.
+
+## Daily / swing study (analysis/daily_swing.mjs)
+- 83 stocks, 8 years daily, long-only, costs 0.25% + 0.05%/side slippage, train <=2023 / test 2024+, with a no-signal control.
+- 96 configs: 0 passed the gate. Train looked great (PF 1.5-1.8) but mostly market drift (control ~ same); test mostly negative.
+- Best honest: "trend pullback (SMA50>SMA200, close<=EMA20, RSI14<45), stop 3 ATR, hold 40d": test +0.62%/trade PF 1.15, 6/8 yrs positive, beats control only ~0.5%. Below PF 1.3 gate.
+- Momentum (monthly top-K by 6m return): beats equal-weight by ~0.1-0.4%/month in both halves, but hit-rate 50-59% and survivorship bias (today's stock list) inflates it. Not tradable proof.
+- Verdict: still no validated edge. Daily timeframe is less bad than intraday (costs matter less).
