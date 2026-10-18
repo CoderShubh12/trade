@@ -113,3 +113,13 @@ Net R/trade after costs, PF all / test half, n trades:
 - targets x1.5 instead of x1 changed nothing (-0.29R, same PF): targets are rarely reached inside 60 min.
 - Reading: a higher score does NOT predict better trades (85 is slightly worse than 65), so the composite score itself carries no usable edge on this data; bigger targets do not help. Nothing changed in the live rules. Still no setup near the gate (PF >= 1.3).
 - Next ideas (history only): different entry logic instead of tuning this one (e.g. opening-range / relative-strength / volume-spike days), longer history (6-12 months), daily/swing timeframe where cost drag is smaller.
+
+## 2026-10-18 hindsight / reverse-engineering study (analysis/hindsight.mjs -> analysis/hindsight_summary.json)
+Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 stocks, 63 days). Hindsight label = a trade at the next open (SL 1.2 ATR, target 2.0 ATR, 60-min hold, costs + slippage) reached its target. ~35 factors visible at the signal bar's close were then compared on a chronological 70/30 split. DIAGNOSTIC; with ~35 factors tested some look good by chance.
+- Baseline (take every bar): target hit 19.8%, net -0.51R/trade (train -0.53, test -0.47).
+- NO single factor has positive net R after costs on both halves (0 of 35). Best (least bad) on the later 30%: ATR% > 0.30 (-0.29R), gap against (-0.40R), first hour (-0.40R). Worst: calm ATR% < 0.15 (-0.68R) and afternoon window (-0.56R).
+- Pairs: best was ATR% > 0.30 + RSI extreme against: -0.29 / -0.24R (PF 0.62 test). Nothing positive.
+- Why ATR% matters: costs (Rs 40 + 0.035%) are fixed, so quiet stocks pay far more cost per R. This is a cost effect, not a signal. Idea to test: only trade high-ATR% stocks/days, wider stops, fewer trades.
+- Tool vs hindsight: the tool's score (>= 65 on the side) was present before 14.3% of the trades that reached their target (85.7% missed). When the score was >= 65, 20.0% reached target vs 19.8% for a random bar (lift 1.01): the score adds no information here.
+- What was visible before the good trades the tool missed: nothing stands out (largest over-representation x1.14, calm ATR, volume spike, afternoon). Candle patterns and chart patterns: no edge either, in line with the earlier pattern backtest.
+- Conclusion: none of the standard indicators/patterns we have predicts a profitable 5m trade after costs; the loss is mostly cost drag (-0.5R/trade baseline). Next: volatility/cost-aware filtering (high ATR% only), other timeframe (daily/swing), more history.

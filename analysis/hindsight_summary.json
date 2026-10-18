@@ -1,0 +1,800 @@
+{
+ "generatedFor": "42 stocks, 2026-07-14 -> 2026-10-09",
+ "split": "2026-09-11",
+ "note": "DIAGNOSTIC. Hindsight labels; ~35 factors tested, some will look good by chance. A factor needs positive net R on BOTH halves AND a fresh out-of-sample period before it can become a rule.",
+ "baseline": {
+  "n": 213528,
+  "hit": 0.19830186205087857,
+  "meanR": -0.5137146825178729,
+  "trainR": -0.533539785018633,
+  "testR": -0.4688473452792885
+ },
+ "factors": [
+  {
+   "factor": "active: ATR% > 0.30",
+   "n": 23642,
+   "nTrain": 13562,
+   "nTest": 10080,
+   "hitPct": 17.016326875898823,
+   "lift": 0.858102223545078,
+   "rTrain": -0.30648687053387347,
+   "rTest": -0.29322227173389676,
+   "pfTest": 0.550300849897236,
+   "hitTest": 19.196428571428573
+  },
+  {
+   "factor": "gap at open against (> 0.3%)",
+   "n": 55965,
+   "nTrain": 38458,
+   "nTest": 17507,
+   "hitPct": 20.19476458500849,
+   "lift": 1.0183850205010727,
+   "rTrain": -0.4861473522153947,
+   "rTest": -0.4027323646685939,
+   "pfTest": 0.4711636882025069,
+   "hitTest": 22.5681156108985
+  },
+  {
+   "factor": "time: first hour (before 10:15)",
+   "n": 46872,
+   "nTrain": 32508,
+   "nTest": 14364,
+   "hitPct": 18.450247482505546,
+   "lift": 0.9304122155833182,
+   "rTrain": -0.43116611527525306,
+   "rTest": -0.4036921698950738,
+   "pfTest": 0.45567530780367443,
+   "hitTest": 20.029239766081872
+  },
+  {
+   "factor": "RSI extreme with the trade (>70 buy / <30 sell)",
+   "n": 13138,
+   "nTrain": 8670,
+   "nTest": 4468,
+   "hitPct": 20.672857360328816,
+   "lift": 1.042494364224616,
+   "rTrain": -0.48984080573921734,
+   "rTest": -0.4308622814972312,
+   "pfTest": 0.4507361089815625,
+   "hitTest": 22.672336615935542
+  },
+  {
+   "factor": "RSI extreme against (oversold buy / overbought sell)",
+   "n": 13138,
+   "nTrain": 8670,
+   "nTest": 4468,
+   "hitPct": 21.038209773177044,
+   "lift": 1.060918417789705,
+   "rTrain": -0.4404821543795464,
+   "rTest": -0.43407955973290757,
+   "pfTest": 0.4469327562747229,
+   "hitTest": 22.179946284691137
+  },
+  {
+   "factor": "VWAP: price on trade side",
+   "n": 106764,
+   "nTrain": 74046,
+   "nTest": 32718,
+   "hitPct": 20.140684125735266,
+   "lift": 1.015657841910115,
+   "rTrain": -0.5378188450912851,
+   "rTest": -0.43807247402043975,
+   "pfTest": 0.4422682855041981,
+   "hitTest": 22.67864783910997
+  },
+  {
+   "factor": "location: within 0.5 ATR of day high (buy) / low (sell)",
+   "n": 15540,
+   "nTrain": 10412,
+   "nTest": 5128,
+   "hitPct": 20.682110682110682,
+   "lift": 1.0429609923079919,
+   "rTrain": -0.5120101047487905,
+   "rTest": -0.4394077073879188,
+   "pfTest": 0.44947648212246183,
+   "hitTest": 23.264430577223088
+  },
+  {
+   "factor": "volume dry (< 0.7x)",
+   "n": 102818,
+   "nTrain": 72276,
+   "nTest": 30542,
+   "hitPct": 18.642650119628858,
+   "lift": 0.9401147284661245,
+   "rTrain": -0.502262096069228,
+   "rTest": -0.4473355339582314,
+   "pfTest": 0.4233869141196143,
+   "hitTest": 20.42105952458909
+  },
+  {
+   "factor": "momentum: last 3 bars moved > 1 ATR with the trade",
+   "n": 28942,
+   "nTrain": 19332,
+   "nTest": 9610,
+   "hitPct": 20.845138552968002,
+   "lift": 1.051182189485429,
+   "rTrain": -0.5290592853516111,
+   "rTest": -0.4496874944753138,
+   "pfTest": 0.43705249175853095,
+   "hitTest": 22.559833506763788
+  },
+  {
+   "factor": "TOOL: |score| >= 45 on the trade side",
+   "n": 56727,
+   "nTrain": 38448,
+   "nTest": 18279,
+   "hitPct": 19.992243552452976,
+   "lift": 1.0081722554538364,
+   "rTrain": -0.5615565776366584,
+   "rTest": -0.4555438262392475,
+   "pfTest": 0.4297572217446098,
+   "hitTest": 22.501230920728705
+  },
+  {
+   "factor": "MACD histogram aligned",
+   "n": 106764,
+   "nTrain": 74046,
+   "nTest": 32718,
+   "hitPct": 20.117267992956428,
+   "lift": 1.0144770091868787,
+   "rTrain": -0.5364734384861449,
+   "rTest": -0.4559936783715621,
+   "pfTest": 0.429512732752823,
+   "hitTest": 22.226297450944436
+  },
+  {
+   "factor": "candle: engulfing aligned",
+   "n": 17930,
+   "nTrain": 12410,
+   "nTest": 5520,
+   "hitPct": 19.58728388176241,
+   "lift": 0.9877508803592008,
+   "rTrain": -0.5370427354909203,
+   "rTest": -0.4573408944534558,
+   "pfTest": 0.4230747770543217,
+   "hitTest": 21.64855072463768
+  },
+  {
+   "factor": "opening range: still inside",
+   "n": 118486,
+   "nTrain": 83836,
+   "nTest": 34650,
+   "hitPct": 19.27316307411846,
+   "lift": 0.9719103428879311,
+   "rTrain": -0.5329595664527869,
+   "rTest": -0.46049753880265515,
+   "pfTest": 0.4162411478927418,
+   "hitTest": 20.92063492063492
+  },
+  {
+   "factor": "day so far up/down aligned (vs prev close)",
+   "n": 106305,
+   "nTrain": 73711,
+   "nTest": 32594,
+   "hitPct": 19.521189031560134,
+   "lift": 0.9844178380206817,
+   "rTrain": -0.553365959443272,
+   "rTest": -0.46242887113600917,
+   "pfTest": 0.4208548884237495,
+   "hitTest": 21.92121249309689
+  },
+  {
+   "factor": "opening range: closed beyond it (aligned)",
+   "n": 37105,
+   "nTrain": 24904,
+   "nTest": 12201,
+   "hitPct": 20.458159277725375,
+   "lift": 1.0316675328281284,
+   "rTrain": -0.6064046614985804,
+   "rTest": -0.4633596635738881,
+   "pfTest": 0.4314175424003713,
+   "hitTest": 24.030817146135565
+  },
+  {
+   "factor": "trend: EMA9 > EMA21 (aligned)",
+   "n": 106764,
+   "nTrain": 74046,
+   "nTest": 32718,
+   "hitPct": 19.515941703195832,
+   "lift": 0.9841532248541671,
+   "rTrain": -0.5568000524387596,
+   "rTest": -0.4642862726509106,
+   "pfTest": 0.4190751395939917,
+   "hitTest": 21.810624121278806
+  },
+  {
+   "factor": "candle: pin bar aligned (hammer buy / shooting star sell)",
+   "n": 25022,
+   "nTrain": 17684,
+   "nTest": 7338,
+   "hitPct": 19.271041483494525,
+   "lift": 0.9718033549553926,
+   "rTrain": -0.5818631473060643,
+   "rTest": -0.46690588196563276,
+   "pfTest": 0.4186312087050855,
+   "hitTest": 22.158626328699917
+  },
+  {
+   "factor": "momentum: last 3 bars moved > 1 ATR against (pullback entry)",
+   "n": 28942,
+   "nTrain": 19332,
+   "nTest": 9610,
+   "hitPct": 20.58945477161219,
+   "lift": 1.0382885243069238,
+   "rTrain": -0.49368771662945754,
+   "rTest": -0.46756832149825117,
+   "pfTest": 0.4180180556829075,
+   "hitTest": 21.65452653485952
+  },
+  {
+   "factor": "trend: price beyond EMA50 (aligned)",
+   "n": 106764,
+   "nTrain": 74046,
+   "nTest": 32718,
+   "hitPct": 19.43632685174778,
+   "lift": 0.9801383935951632,
+   "rTrain": -0.5611041894101781,
+   "rTest": -0.4680846564464683,
+   "pfTest": 0.41539604103302746,
+   "hitTest": 21.67919799498747
+  },
+  {
+   "factor": "TOOL: |score| >= 65 on the trade side",
+   "n": 30311,
+   "nTrain": 20123,
+   "nTest": 10188,
+   "hitPct": 20.038929761472733,
+   "lift": 1.0105265555363931,
+   "rTrain": -0.5620905300556114,
+   "rTest": -0.46925460354242693,
+   "pfTest": 0.4206894764154592,
+   "hitTest": 22.398900667451905
+  },
+  {
+   "factor": "RSI in the tool's zone (56-68 buy / 32-44 sell)",
+   "n": 51027,
+   "nTrain": 34946,
+   "nTest": 16081,
+   "hitPct": 19.583749779528485,
+   "lift": 0.9875726620511438,
+   "rTrain": -0.5676799325586583,
+   "rTest": -0.4711822594776208,
+   "pfTest": 0.4140309381293837,
+   "hitTest": 21.67775635843542
+  },
+  {
+   "factor": "trend: EMA9 against the trade",
+   "n": 106764,
+   "nTrain": 74046,
+   "nTest": 32718,
+   "hitPct": 20.14443070697988,
+   "lift": 1.0158467751458327,
+   "rTrain": -0.5102795175984994,
+   "rTest": -0.47340841790768,
+   "pfTest": 0.41262682224159697,
+   "hitTest": 21.42551500702977
+  },
+  {
+   "factor": "candle: pin bar against",
+   "n": 25022,
+   "nTrain": 17684,
+   "nTest": 7338,
+   "hitPct": 20.653824634321797,
+   "lift": 1.0415345786830088,
+   "rTrain": -0.5060860338085922,
+   "rTest": -0.4761627437840267,
+   "pfTest": 0.411989112506745,
+   "hitTest": 22.09048787135459
+  },
+  {
+   "factor": "VWAP: stretched > 1.5 ATR on trade side",
+   "n": 40544,
+   "nTrain": 27135,
+   "nTest": 13409,
+   "hitPct": 21.50996448303078,
+   "lift": 1.0847081444707736,
+   "rTrain": -0.5786488420541548,
+   "rTest": -0.4766626319750039,
+   "pfTest": 0.42163187579503314,
+   "hitTest": 23.931687672458796
+  },
+  {
+   "factor": "candle: inside bar",
+   "n": 48378,
+   "nTrain": 34174,
+   "nTest": 14204,
+   "hitPct": 19.676299144239117,
+   "lift": 0.9922397571431146,
+   "rTrain": -0.5403740435337419,
+   "rTest": -0.4814918577834816,
+   "pfTest": 0.40367241669623977,
+   "hitTest": 21.16305266122219
+  },
+  {
+   "factor": "candle: doji",
+   "n": 38474,
+   "nTrain": 27150,
+   "nTest": 11324,
+   "hitPct": 20.044705515413007,
+   "lift": 1.0108178162376564,
+   "rTrain": -0.542400271629955,
+   "rTest": -0.4835481487608457,
+   "pfTest": 0.4061940414050429,
+   "hitTest": 21.714941716707877
+  },
+  {
+   "factor": "TOOL: score on the other side (<= -45 for a buy)",
+   "n": 56727,
+   "nTrain": 38448,
+   "nTest": 18279,
+   "hitPct": 20.286635993442275,
+   "lift": 1.0230179274986992,
+   "rTrain": -0.49673595070335264,
+   "rTest": -0.49410137791272923,
+   "pfTest": 0.39560091813568654,
+   "hitTest": 20.849061764866786
+  },
+  {
+   "factor": "volume spike (>= 1.4x avg of last 10)",
+   "n": 36856,
+   "nTrain": 25184,
+   "nTest": 11672,
+   "hitPct": 21.75493813761667,
+   "lift": 1.0970617175563877,
+   "rTrain": -0.5589180235698571,
+   "rTest": -0.4968276569842795,
+   "pfTest": 0.4053471690142712,
+   "hitTest": 22.986634681288553
+  },
+  {
+   "factor": "VWAP: price on the OTHER side (counter-VWAP)",
+   "n": 106764,
+   "nTrain": 74046,
+   "nTest": 32718,
+   "hitPct": 19.51968828444045,
+   "lift": 0.984342158089885,
+   "rTrain": -0.5292607249459759,
+   "rTest": -0.4996222165381502,
+   "pfTest": 0.39051205470509276,
+   "hitTest": 20.557491289198605
+  },
+  {
+   "factor": "location: > 3 ATR from day extreme in trade direction",
+   "n": 102637,
+   "nTrain": 71483,
+   "nTest": 31154,
+   "hitPct": 20.361078363553105,
+   "lift": 1.0267719199897898,
+   "rTrain": -0.5485533335824123,
+   "rTest": -0.5029843343658935,
+   "pfTest": 0.3932547827906083,
+   "hitTest": 21.448289144251138
+  },
+  {
+   "factor": "chart pattern against (any)",
+   "n": 6004,
+   "nTrain": 4127,
+   "nTest": 1877,
+   "hitPct": 22.36842105263158,
+   "lift": 1.1279985382533868,
+   "rTrain": -0.5775094697929966,
+   "rTest": -0.5064022249299767,
+   "pfTest": 0.40287796626085765,
+   "hitTest": 23.81459776238679
+  },
+  {
+   "factor": "gap at open aligned (> 0.3%)",
+   "n": 55965,
+   "nTrain": 38458,
+   "nTest": 17507,
+   "hitPct": 18.297150004467078,
+   "lift": 0.9226917899425752,
+   "rTrain": -0.5437006620494902,
+   "rTest": -0.5175688680592152,
+   "pfTest": 0.37074975825399387,
+   "hitTest": 19.4779231164677
+  },
+  {
+   "factor": "opening range: closed beyond it AGAINST the trade",
+   "n": 37105,
+   "nTrain": 24904,
+   "nTest": 12201,
+   "hitPct": 20.835466918205096,
+   "lift": 1.0506944666439548,
+   "rTrain": -0.5221030408666989,
+   "rTest": -0.5398748889217693,
+   "pfTest": 0.3691099196130102,
+   "hitTest": 20.817965740513074
+  },
+  {
+   "factor": "chart pattern aligned (any)",
+   "n": 6004,
+   "nTrain": 4127,
+   "nTest": 1877,
+   "hitPct": 21.335776149233844,
+   "lift": 1.0759241455715478,
+   "rTrain": -0.6247482274683503,
+   "rTest": -0.5432482813832114,
+   "pfTest": 0.3772020138250069,
+   "hitTest": 22.74906766116143
+  },
+  {
+   "factor": "time: afternoon window (13:30+)",
+   "n": 83328,
+   "nTrain": 57792,
+   "nTest": 25536,
+   "hitPct": 21.831797235023043,
+   "lift": 1.1009375811822497,
+   "rTrain": -0.6491175409867713,
+   "rTest": -0.5591172704754848,
+   "pfTest": 0.3732471900122245,
+   "hitTest": 24.052318295739347
+  },
+  {
+   "factor": "calm: ATR% < 0.15",
+   "n": 43846,
+   "nTrain": 34690,
+   "nTest": 9156,
+   "hitPct": 22.70674633946084,
+   "lift": 1.1450596633144543,
+   "rTrain": -0.732522930322816,
+   "rTest": -0.6761878394473072,
+   "pfTest": 0.317049992142117,
+   "hitTest": 25.48055919615553
+  }
+ ],
+ "pairs": [
+  {
+   "pair": "active: ATR% > 0.30  +  RSI extreme against (oversold buy / overbought sell)",
+   "nTr": 1848,
+   "nTe": 1139,
+   "rTr": -0.2863506177215132,
+   "rTe": -0.24401338489688865,
+   "pfTe": 0.6190095651804485
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  opening range: still inside",
+   "nTr": 7018,
+   "nTe": 5416,
+   "rTr": -0.30151641410590635,
+   "rTe": -0.29976439330362437,
+   "pfTe": 0.5299013709510613
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  volume dry (< 0.7x)",
+   "nTr": 8270,
+   "nTe": 5998,
+   "rTr": -0.30966780836511715,
+   "rTe": -0.30275393744682255,
+   "pfTe": 0.530905629982631
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  time: first hour (before 10:15)",
+   "nTr": 6332,
+   "nTe": 4528,
+   "rTr": -0.30997842113128204,
+   "rTe": -0.31642152667827567,
+   "pfTe": 0.5253361589433487
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  day so far up/down aligned (vs prev close)",
+   "nTr": 6766,
+   "nTe": 5033,
+   "rTr": -0.32084763956697476,
+   "rTe": -0.3223903801874102,
+   "pfTe": 0.5177078124049225
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  gap at open against (> 0.3%)",
+   "nTr": 4797,
+   "nTe": 3343,
+   "rTr": -0.3230348040920419,
+   "rTe": -0.1806929983159612,
+   "pfTe": 0.6896727646706191
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  RSI extreme with the trade (>70 buy / <30 sell)",
+   "nTr": 1848,
+   "nTe": 1139,
+   "rTr": -0.32523509083754537,
+   "rTe": -0.33011235803208294,
+   "pfTe": 0.518206662932346
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  VWAP: price on trade side",
+   "nTr": 6781,
+   "nTe": 5040,
+   "rTr": -0.3195966326267719,
+   "rTe": -0.33411405495954294,
+   "pfTe": 0.5035365260419459
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  candle: engulfing aligned",
+   "nTr": 1046,
+   "nTe": 806,
+   "rTr": -0.33453723939569624,
+   "rTe": -0.23026883574337176,
+   "pfTe": 0.6277417606890708
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  momentum: last 3 bars moved > 1 ATR with the trade",
+   "nTr": 2353,
+   "nTe": 1756,
+   "rTr": -0.3439526436044924,
+   "rTe": -0.2704686012214414,
+   "pfTe": 0.5873272981153984
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  TOOL: |score| >= 45 on the trade side",
+   "nTr": 3607,
+   "nTe": 2838,
+   "rTr": -0.35450722539732,
+   "rTe": -0.3187828721448319,
+   "pfTe": 0.5256661099098578
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  MACD histogram aligned",
+   "nTr": 6781,
+   "nTe": 5040,
+   "rTr": -0.3616001329105182,
+   "rTe": -0.22510645140125152,
+   "pfTe": 0.6360294281542277
+  },
+  {
+   "pair": "active: ATR% > 0.30  +  location: within 0.5 ATR of day high (buy) / low (sell)",
+   "nTr": 1181,
+   "nTe": 874,
+   "rTr": -0.3655630174872764,
+   "rTe": -0.3559902856094474,
+   "pfTe": 0.5015852563374659
+  },
+  {
+   "pair": "gap at open against (> 0.3%)  +  time: first hour (before 10:15)",
+   "nTr": 8442,
+   "nTe": 3843,
+   "rTr": -0.3984102375805994,
+   "rTe": -0.35171236749219936,
+   "pfTe": 0.5029697261158727
+  },
+  {
+   "pair": "time: first hour (before 10:15)  +  RSI extreme against (oversold buy / overbought sell)",
+   "nTr": 3652,
+   "nTe": 1633,
+   "rTr": -0.3517443253226953,
+   "rTe": -0.4047866241750256,
+   "pfTe": 0.461441566923906
+  }
+ ],
+ "tool": {
+  "goodN": 42343,
+  "goodCaught": 6074,
+  "sigN": 30311,
+  "sigGood": 6074
+ },
+ "missedFactors": [
+  {
+   "f": "calm: ATR% < 0.15",
+   "pm": 0.23926769417408805,
+   "pr": 0.20933646986906237,
+   "ratio": 1.1429814132422664
+  },
+  {
+   "f": "chart pattern against (any)",
+   "pm": 0.03686343709503984,
+   "pr": 0.032589770599889746,
+   "ratio": 1.1311352125677299
+  },
+  {
+   "f": "volume spike (>= 1.4x avg of last 10)",
+   "pm": 0.17833411453307232,
+   "pr": 0.16114225208359487,
+   "ratio": 1.1066874902589727
+  },
+  {
+   "f": "time: afternoon window (13:30+)",
+   "pm": 0.4356613085555157,
+   "pr": 0.39461403690705554,
+   "ratio": 1.1040187824289893
+  },
+  {
+   "f": "VWAP: stretched > 1.5 ATR on trade side",
+   "pm": 0.13259257216907,
+   "pr": 0.12080210897460389,
+   "ratio": 1.0976014681742419
+  },
+  {
+   "f": "RSI extreme against (oversold buy / overbought sell)",
+   "pm": 0.07620833218451019,
+   "pr": 0.07170731973561405,
+   "ratio": 1.0627692188955247
+  },
+  {
+   "f": "chart pattern aligned (any)",
+   "pm": 0.020844247153216245,
+   "pr": 0.019616083660359027,
+   "ratio": 1.0626100252283865
+  },
+  {
+   "f": "opening range: closed beyond it AGAINST the trade",
+   "pm": 0.2128815241666437,
+   "pr": 0.2021591882849299,
+   "ratio": 1.0530390726866263
+  },
+  {
+   "f": "candle: pin bar against",
+   "pm": 0.1298078248642091,
+   "pr": 0.12433889868298248,
+   "ratio": 1.0439840326651946
+  },
+  {
+   "f": "momentum: last 3 bars moved > 1 ATR against (pullback entry)",
+   "pm": 0.16281121619013483,
+   "pr": 0.15616454804958055,
+   "ratio": 1.0425619529116432
+  },
+  {
+   "f": "momentum: last 3 bars moved > 1 ATR with the trade",
+   "pm": 0.10102291212881524,
+   "pr": 0.0974909533503987,
+   "ratio": 1.036228579750596
+  },
+  {
+   "f": "location: > 3 ATR from day extreme in trade direction",
+   "pm": 0.5658275662411426,
+   "pr": 0.5501945780140489,
+   "ratio": 1.0284135628590192
+  }
+ ],
+ "examples": [
+  {
+   "sym": "TCS",
+   "date": "2026-10-09",
+   "barIndex": 4531,
+   "side": "BUY",
+   "netR": 1.51,
+   "factors": [
+    "trend: EMA9 > EMA21 (aligned)",
+    "trend: price beyond EMA50 (aligned)",
+    "VWAP: price on trade side",
+    "RSI in the tool's zone (56-68 buy / 32-44 sell)",
+    "MACD histogram aligned",
+    "volume dry (< 0.7x)",
+    "opening range: still inside",
+    "gap at open aligned (> 0.3%)",
+    "momentum: last 3 bars moved > 1 ATR against (pullback entry)",
+    "day so far up/down aligned (vs prev close)",
+    "active: ATR% > 0.30",
+    "time: first hour (before 10:15)",
+    "TOOL: |score| >= 45 on the trade side"
+   ]
+  },
+  {
+   "sym": "IDFCFIRSTB",
+   "date": "2026-09-30",
+   "barIndex": 4091,
+   "side": "BUY",
+   "netR": 1.44,
+   "factors": [
+    "trend: EMA9 against the trade",
+    "VWAP: price on the OTHER side (counter-VWAP)",
+    "volume dry (< 0.7x)",
+    "gap at open against (> 0.3%)",
+    "active: ATR% > 0.30",
+    "time: first hour (before 10:15)"
+   ]
+  },
+  {
+   "sym": "PNB",
+   "date": "2026-09-16",
+   "barIndex": 3374,
+   "side": "BUY",
+   "netR": 1.42,
+   "factors": [
+    "trend: EMA9 against the trade",
+    "VWAP: price on the OTHER side (counter-VWAP)",
+    "volume dry (< 0.7x)",
+    "momentum: last 3 bars moved > 1 ATR against (pullback entry)",
+    "location: > 3 ATR from day extreme in trade direction",
+    "active: ATR% > 0.30",
+    "time: first hour (before 10:15)",
+    "candle: pin bar against",
+    "TOOL: score on the other side (<= -45 for a buy)"
+   ]
+  },
+  {
+   "sym": "AUBANK",
+   "date": "2026-10-01",
+   "barIndex": 4173,
+   "side": "BUY",
+   "netR": 1.4,
+   "factors": [
+    "trend: EMA9 against the trade",
+    "VWAP: price on the OTHER side (counter-VWAP)",
+    "MACD histogram aligned",
+    "volume spike (>= 1.4x avg of last 10)",
+    "opening range: still inside",
+    "gap at open aligned (> 0.3%)"
+   ]
+  },
+  {
+   "sym": "JSWSTEEL",
+   "date": "2026-09-30",
+   "barIndex": 4095,
+   "side": "BUY",
+   "netR": 1.39,
+   "factors": [
+    "trend: EMA9 > EMA21 (aligned)",
+    "trend: price beyond EMA50 (aligned)",
+    "VWAP: price on trade side",
+    "RSI in the tool's zone (56-68 buy / 32-44 sell)",
+    "MACD histogram aligned",
+    "volume dry (< 0.7x)",
+    "opening range: still inside",
+    "gap at open aligned (> 0.3%)",
+    "momentum: last 3 bars moved > 1 ATR with the trade",
+    "day so far up/down aligned (vs prev close)",
+    "time: first hour (before 10:15)",
+    "candle: pin bar aligned (hammer buy / shooting star sell)",
+    "candle: doji",
+    "TOOL: |score| >= 45 on the trade side"
+   ]
+  },
+  {
+   "sym": "CIPLA",
+   "date": "2026-10-01",
+   "barIndex": 4179,
+   "side": "SELL",
+   "netR": 1.38,
+   "factors": [
+    "trend: EMA9 > EMA21 (aligned)",
+    "trend: price beyond EMA50 (aligned)",
+    "VWAP: price on trade side",
+    "RSI in the tool's zone (56-68 buy / 32-44 sell)",
+    "volume dry (< 0.7x)",
+    "opening range: still inside",
+    "gap at open aligned (> 0.3%)",
+    "momentum: last 3 bars moved > 1 ATR with the trade",
+    "location: > 3 ATR from day extreme in trade direction",
+    "day so far up/down aligned (vs prev close)",
+    "TOOL: |score| >= 45 on the trade side"
+   ]
+  },
+  {
+   "sym": "AXISBANK",
+   "date": "2026-10-07",
+   "barIndex": 4384,
+   "side": "BUY",
+   "netR": 1.37,
+   "factors": [
+    "trend: EMA9 against the trade",
+    "VWAP: price on the OTHER side (counter-VWAP)",
+    "RSI extreme against (oversold buy / overbought sell)",
+    "volume dry (< 0.7x)",
+    "opening range: still inside",
+    "gap at open against (> 0.3%)",
+    "momentum: last 3 bars moved > 1 ATR with the trade",
+    "time: first hour (before 10:15)",
+    "candle: pin bar aligned (hammer buy / shooting star sell)",
+    "candle: doji",
+    "TOOL: score on the other side (<= -45 for a buy)"
+   ]
+  },
+  {
+   "sym": "SUNPHARMA",
+   "date": "2026-09-18",
+   "barIndex": 3515,
+   "side": "SELL",
+   "netR": 1.36,
+   "factors": [
+    "trend: EMA9 against the trade",
+    "VWAP: price on the OTHER side (counter-VWAP)",
+    "RSI extreme against (oversold buy / overbought sell)",
+    "volume dry (< 0.7x)",
+    "momentum: last 3 bars moved > 1 ATR against (pullback entry)",
+    "location: > 3 ATR from day extreme in trade direction",
+    "time: first hour (before 10:15)",
+    "TOOL: score on the other side (<= -45 for a buy)"
+   ]
+  }
+ ]
+}
