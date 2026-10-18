@@ -134,3 +134,8 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 ## High-ATR% intraday filter (MIN_ATRPCT env in analysis/autopsy_batch.mjs, with HOLD_BARS=12)
 - Filter does nothing until ATR% >= 0.4 (almost all 5m ATR is below it); at 0.45: n=290, PF 0.48 (test 0.57), -0.27R/trade; at 0.5: n=197, PF 0.35.
 - Best case still PF < 0.6 and net negative on both halves -> cost-aware filtering does not rescue the intraday rules. Gate (PF>=1.3) not met.
+
+## Stock-selection test (STOCKSEL=1 node analysis/.build/autopsy_batch.mjs)
+- User's question: maybe the stocks are wrong. Tested: 42 stocks, pick best by TRAIN net R, evaluate on TEST.
+- 0 of 42 stocks positive even in train (best -0.17R). Train-vs-test correlation per stock = -0.31 (no persistence). Top 5/10/15 by train -> test: -0.30/-0.26/-0.29R, PF 0.29-0.35.
+- Verdict: stock picking is not the problem; the entry/exit rules lose on every stock.

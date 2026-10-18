@@ -26,7 +26,8 @@ const HOLD = Number(process.env.HOLD_BARS) || 5; // time stop in 5m bars (5 = th
 const VB = process.env.VWAP_BUF_PCT === "off" ? Infinity : Number(process.env.VWAP_BUF_PCT) || 0.05;
 // More what-ifs: MIN_SCORE=75 only takes calls with |score| >= 75 (terminal uses 65); TGT_SCALE=1.5 multiplies T1/T2 distances (stop unchanged).
 const MIN_SCORE = Number(process.env.MIN_SCORE) || 65, TGT = Number(process.env.TGT_SCALE) || 1;
-const DEFAULTS = HOLD === 5 && VB === 0.05 && MIN_SCORE === 65 && TGT === 1;
+const MIN_ATRPCT = Number(process.env.MIN_ATRPCT) || 0; // MIN_ATRPCT=0.3 only trades when 14-bar ATR >= 0.3% of price (costs weigh less)
+const DEFAULTS = HOLD === 5 && VB === 0.05 && MIN_SCORE === 65 && TGT === 1 && MIN_ATRPCT === 0;
 const RISK = 500, SLIP = 0.0003, CAP = 500000, WINDOW_BARS = 375, LOSS_COOL_MIN = 45;
 const cost = (n) => 40 + 0.00035 * n;
 const hhmmOf = (ms) => { const d = new Date(ms + 330 * 60000); return d.getUTCHours() * 100 + d.getUTCMinutes(); };
@@ -75,6 +76,7 @@ async function replay(sym, c, sc, slMult) {
     if (Math.abs(s.score) < MIN_SCORE) continue;
     if (!checkSignalAllowed(mem, now).allowed) continue;
     if (s.atr === null) { s.atr = calculateATR(s.closed, 14); s.regime = detectMarketRegime(s.closed); }
+    if (MIN_ATRPCT && (100 * s.atr) / c[i].close < MIN_ATRPCT) continue;
     const setup = await evaluateTradeSetup(s.score, biasAt(c[i]), c[i], s.vwap, s.atr, { nowMs: now, bypassTimeWindow: false, useGroqValidation: false, symbol: sym, timeframe: "5", regime: s.regime });
     if (!setup || (setup.action !== "BUY" && setup.action !== "SELL")) continue;
     mem = recordEntry(mem, setup.action);
