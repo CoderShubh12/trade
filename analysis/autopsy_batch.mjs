@@ -21,7 +21,8 @@ import { evaluateTradeSetup, monitorActiveTrade } from "../lib/tradeManager";
 import { autopsyTrade } from "../lib/autopsy.js";
 
 const DIR = process.argv[2] || "data/movers/5m";
-const RISK = 500, SLIP = 0.0003, CAP = 500000, HOLD = 5, WINDOW_BARS = 375, LOSS_COOL_MIN = 45;
+const HOLD = Number(process.env.HOLD_BARS) || 5; // time stop in 5m bars (5 = the terminal's 25 min). HOLD_BARS=12 node ... tests 60 min
+const RISK = 500, SLIP = 0.0003, CAP = 500000, WINDOW_BARS = 375, LOSS_COOL_MIN = 45;
 const cost = (n) => 40 + 0.00035 * n;
 const hhmmOf = (ms) => { const d = new Date(ms + 330 * 60000); return d.getUTCHours() * 100 + d.getUTCMinutes(); };
 const SKIP = new Set(["NIFTY_50", "BANK_NIFTY"]);
@@ -78,7 +79,7 @@ async function replay(sym, c, sc, slMult) {
     const safeAtr = Math.abs(setup.entry - setup.stopLoss) / 1.2;
     const entry = c[e].open * (1 + SLIP * side);
     const stop0 = +(entry - side * slMult * safeAtr).toFixed(2);
-    const tr = { action: setup.action, entry, target1: +(entry + side * 2 * safeAtr).toFixed(2), target2: +(entry + side * 3.5 * safeAtr).toFixed(2), stopLoss: stop0, t1Reached: false, maxTime: now + 25 * 60000 };
+    const tr = { action: setup.action, entry, target1: +(entry + side * 2 * safeAtr).toFixed(2), target2: +(entry + side * 3.5 * safeAtr).toFixed(2), stopLoss: stop0, t1Reached: false, maxTime: now + HOLD * 5 * 60000 };
 
     // walk the bars with the app's own monitorActiveTrade
     let px = null, why = "", xi = e, vp = 0, vv = 0;
@@ -225,8 +226,7 @@ for (const x of base) {
   seen.add(key);
   pick.push({ ...x.rep, source: "simulation replay (not a journal trade)", levels: { entry: x.rec.entry, stop: x.rec.initialSl, t1: x.rec.target1, exit: x.rec.exitPrice }, exitReason: x.why, netR: R(x.netR), chart: dayChart(x.c, x.rep) });
 }
-fs.writeFileSync("analysis/autopsy_samples.json", JSON.stringify(pick));
-fs.writeFileSync("analysis/autopsy_summary.json", JSON.stringify(S, null, 2));
+if (HOLD === 5) { fs.writeFileSync("analysis/autopsy_samples.json", JSON.stringify(pick)); fs.writeFileSync("analysis/autopsy_summary.json", JSON.stringify(S, null, 2)); } // other hold times are what-if runs: never overwrite the baseline files
 
 // ---------------- print ----------------
 const P = (t, o) => { console.log(`\n${t}`); for (const [k, v] of Object.entries(o)) console.log("  " + k.padEnd(30), typeof v.n === "number" && "avgNetR" in v ? fmtRow(v) : JSON.stringify(v)); };
