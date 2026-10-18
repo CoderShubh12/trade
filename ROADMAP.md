@@ -106,3 +106,10 @@ Same 42 stocks x 63 days, same costs. Net R/trade after costs, PF (all / test ha
 - Fundamentals-only screener (Market Cap, P/E, ROCE, ROE, Debt/Equity, growth) over 2,000+ NSE stocks, data from Cogencis. No price/candle data, so it cannot improve intraday signals directly.
 - Possible later use: pre-market watchlist hygiene (drop weak/high-debt names) and a cross-check for the Yahoo fundamentals bot. Only after a history test shows it helps; unknown whether an API/export exists.
 - Also looked at ai-tradingterminal.com (AITT): landing page only, no performance claims. Design ideas worth borrowing: offline-first, strict GUI/backend/agents/broker separation.
+
+## 2026-10-18 what-if: stricter score + bigger targets (env MIN_SCORE, TGT_SCALE; run with hold 60 min, VWAP buffer 0.3%)
+Net R/trade after costs, PF all / test half, n trades:
+- min |score| 65 (today): n 5,909, -0.29R, PF 0.40 / 0.49. 75: n 4,637, -0.29R, PF 0.39 / 0.47. 85: n 3,255, -0.31R, PF 0.37 / 0.40.
+- targets x1.5 instead of x1 changed nothing (-0.29R, same PF): targets are rarely reached inside 60 min.
+- Reading: a higher score does NOT predict better trades (85 is slightly worse than 65), so the composite score itself carries no usable edge on this data; bigger targets do not help. Nothing changed in the live rules. Still no setup near the gate (PF >= 1.3).
+- Next ideas (history only): different entry logic instead of tuning this one (e.g. opening-range / relative-strength / volume-spike days), longer history (6-12 months), daily/swing timeframe where cost drag is smaller.
