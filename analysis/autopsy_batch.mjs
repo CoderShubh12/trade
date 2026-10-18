@@ -171,6 +171,16 @@ const trn = base.filter((x) => x.rep.date < cut).map((x) => x.netR), tst = base.
 const S = { generatedFor: `${stocks} stocks, ${dates[0]} -> ${dates[dates.length - 1]}`, note: "DIAGNOSTIC: why simulated trades fail. Not a profitability claim.", split: cut };
 S.overall = { all: row(all), train: row(trn), test: row(tst) };
 
+if (process.env.STOCKSEL) { // does picking stocks on TRAIN results help on TEST? (STOCKSEL=1)
+  const bySym = {}; for (const x of base) (bySym[x.sym] = bySym[x.sym] || { a: [], b: [] })[x.rep.date < cut ? "a" : "b"].push(x.netR);
+  const rows = Object.entries(bySym).map(([sym, v]) => ({ sym, na: v.a.length, nb: v.b.length, ra: mean(v.a), rb: mean(v.b) })).filter((r) => r.na >= 15 && r.nb >= 6);
+  const corr = (() => { const a = rows.map((r) => r.ra), b = rows.map((r) => r.rb), ma = mean(a), mb = mean(b); let n = 0, da = 0, db = 0; for (let i = 0; i < a.length; i++) { n += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; } return n / Math.sqrt(da * db); })();
+  console.log(`STOCK SELECTION: ${rows.length} stocks. Correlation of per-stock train net R vs test net R = ${corr.toFixed(2)} (near 0 = stock quality does not persist)`);
+  rows.sort((p, q) => q.ra - p.ra);
+  for (const k of [5, 10, 15]) { const top = new Set(rows.slice(0, k).map((r) => r.sym)); const t = base.filter((x) => top.has(x.sym) && x.rep.date >= cut).map((x) => x.netR); console.log(`  top ${k} by TRAIN -> TEST: ${fmtRow(row(t))}`); }
+  const pos = rows.filter((r) => r.ra > 0); console.log(`  stocks positive in TRAIN: ${pos.length}; of those positive in TEST: ${pos.filter((r) => r.rb > 0).length}; best train: ${rows.slice(0, 5).map((r) => `${r.sym} ${r.ra.toFixed(2)}->${r.rb.toFixed(2)}`).join(", ")}`);
+}
+
 const losses = base.filter((x) => x.rep.outcome === "LOSS");
 const causeN = {};
 for (const x of losses) causeN[x.rep.cause] = (causeN[x.rep.cause] || 0) + 1;

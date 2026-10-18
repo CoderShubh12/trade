@@ -139,3 +139,8 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - User's question: maybe the stocks are wrong. Tested: 42 stocks, pick best by TRAIN net R, evaluate on TEST.
 - 0 of 42 stocks positive even in train (best -0.17R). Train-vs-test correlation per stock = -0.31 (no persistence). Top 5/10/15 by train -> test: -0.30/-0.26/-0.29R, PF 0.29-0.35.
 - Verdict: stock picking is not the problem; the entry/exit rules lose on every stock.
+
+## Dynamic stock picker test (DYN=K DYN_MODE=rvol|gap|move|rs|combo|random node analysis/.build/autopsy_batch.mjs)
+- Each day at 09:30 (using only 09:15-09:25 bars + prev close) rank 42 stocks, trade only the top 5 that day with the terminal's own rules.
+- Net R/trade (all / test): rvol -0.26/-0.25, gap -0.30/-0.29, move -0.29/-0.23, rs same as move, combo(rvol+rs+range) -0.29/-0.28, RANDOM 5 -0.28/-0.20. PF 0.27-0.45.
+- No picker beats random picking; every one is net negative. Dynamic picking does not fix the entry/exit rules.
