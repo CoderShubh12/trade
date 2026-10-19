@@ -1,0 +1,69 @@
+{
+  "bar": 15,
+  "hold": 2,
+  "days": 61,
+  "range": "2026-07-15 -> 2026-10-09",
+  "split": "2026-09-11",
+  "all": {
+    "n": 4365,
+    "win": 24,
+    "pf": 0.28,
+    "avgNetR": -0.284
+  },
+  "train": {
+    "n": 2934,
+    "win": 22.3,
+    "pf": 0.24,
+    "avgNetR": -0.302
+  },
+  "test": {
+    "n": 1431,
+    "win": 27.7,
+    "pf": 0.36,
+    "avgNetR": -0.247
+  },
+  "buy": {
+    "n": 1838,
+    "win": 21.3,
+    "pf": 0.28,
+    "avgNetR": -0.314
+  },
+  "sell": {
+    "n": 2527,
+    "win": 26,
+    "pf": 0.28,
+    "avgNetR": -0.263
+  },
+  "byExit": {
+    "TIME_DECAY_TIMEOUT": {
+      "n": 2871,
+      "win": 35.8,
+      "pf": 0.66,
+      "avgNetR": -0.076
+    },
+    "VWAP_BREACH_EXIT": {
+      "n": 1386,
+      "win": 0,
+      "pf": 0,
+      "avgNetR": -0.707
+    },
+    "STOP_LOSS_HIT": {
+      "n": 84,
+      "win": 0,
+      "pf": 0,
+      "avgNetR": -1.203
+    },
+    "TARGET_2_HIT": {
+      "n": 21,
+      "win": 100,
+      "pf": 999,
+      "avgNetR": 2.71
+    },
+    "TRAILING_SL_HIT": {
+      "n": 3,
+      "win": 0,
+      "pf": 0,
+      "avgNetR": -0.015
+    }
+  }
+}

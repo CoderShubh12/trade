@@ -160,3 +160,4 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Added: lib/ownerGuard.js - /api/journal POST now applies exposure limits (all sources) to NEW page calls (409 when blocked), so page and engine cannot double up.
 - Added: lib/dailyReport.js + GET /api/report?day= - read-only daily summary (journal + picker). No edge claims.
 - ownerGuard: added day loss limit (-3R, all sources) for page calls, same as engine.
+- 15m candle test (analysis/autopsy_15m.mjs, resampled from 5m, hold 30min): see analysis/autopsy_15m_summary.json
