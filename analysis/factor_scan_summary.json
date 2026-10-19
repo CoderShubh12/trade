@@ -1,0 +1,292 @@
+{
+  "stocks": 83,
+  "split": "2024-01-01",
+  "h5": {
+    "factors": 102,
+    "trainSignificant": 11,
+    "trainSigAndTestSameSignSig": 0,
+    "expectedByChance": 0.3,
+    "netPositiveBothHalves": [],
+    "top15": [
+      {
+        "f": "ret2",
+        "icTr": -0.0402,
+        "tTr": -3.2,
+        "icTe": -0.0153,
+        "tTe": -1,
+        "exTr": -0.34,
+        "exTe": -0.58
+      },
+      {
+        "f": "distSMA5",
+        "icTr": -0.0312,
+        "tTr": -2.4,
+        "icTe": -0.0148,
+        "tTe": -1,
+        "exTr": -0.5,
+        "exTe": -0.46
+      },
+      {
+        "f": "rsNifty5",
+        "icTr": -0.0311,
+        "tTr": -2.4,
+        "icTe": -0.0183,
+        "tTe": -1.3,
+        "exTr": -0.57,
+        "exTe": -0.46
+      },
+      {
+        "f": "ret5",
+        "icTr": -0.0311,
+        "tTr": -2.4,
+        "icTe": -0.0182,
+        "tTe": -1.3,
+        "exTr": -0.57,
+        "exTe": -0.46
+      },
+      {
+        "f": "distEMA5",
+        "icTr": -0.0298,
+        "tTr": -2.3,
+        "icTe": -0.0146,
+        "tTe": -1,
+        "exTr": -0.5,
+        "exTe": -0.49
+      },
+      {
+        "f": "rsi2",
+        "icTr": -0.0275,
+        "tTr": -2.3,
+        "icTe": -0.0094,
+        "tTe": -0.7,
+        "exTr": -0.41,
+        "exTe": -0.57
+      },
+      {
+        "f": "bbPctB10",
+        "icTr": -0.0265,
+        "tTr": -2.3,
+        "icTe": -0.009,
+        "tTe": -0.7,
+        "exTr": -0.57,
+        "exTe": -0.6
+      },
+      {
+        "f": "rsi3",
+        "icTr": -0.0249,
+        "tTr": -2.1,
+        "icTe": -0.0074,
+        "tTe": -0.5,
+        "exTr": -0.44,
+        "exTe": -0.65
+      },
+      {
+        "f": "volu_ratio1_20",
+        "icTr": -0.0197,
+        "tTr": -2,
+        "icTe": -0.0055,
+        "tTe": -0.5,
+        "exTr": -0.61,
+        "exTe": -0.47
+      },
+      {
+        "f": "cci20",
+        "icTr": -0.0262,
+        "tTr": -2,
+        "icTe": 0.0021,
+        "tTe": 0.2,
+        "exTr": -0.62,
+        "exTe": -0.62
+      },
+      {
+        "f": "ret3",
+        "icTr": -0.0269,
+        "tTr": -2,
+        "icTe": -0.0067,
+        "tTe": -0.5,
+        "exTr": -0.48,
+        "exTe": -0.56
+      },
+      {
+        "f": "volu_ratio5_20",
+        "icTr": -0.0176,
+        "tTr": -1.9,
+        "icTe": 0,
+        "tTe": 0,
+        "exTr": -0.59,
+        "exTe": -0.59
+      },
+      {
+        "f": "rsi5",
+        "icTr": -0.0229,
+        "tTr": -1.8,
+        "icTe": -0.0066,
+        "tTe": -0.5,
+        "exTr": -0.53,
+        "exTe": -0.67
+      },
+      {
+        "f": "gap1",
+        "icTr": -0.0196,
+        "tTr": -1.8,
+        "icTe": -0.037,
+        "tTe": -2.9,
+        "exTr": -0.47,
+        "exTe": -0.57
+      },
+      {
+        "f": "distSMA10",
+        "icTr": -0.0233,
+        "tTr": -1.8,
+        "icTe": -0.0118,
+        "tTe": -0.8,
+        "exTr": -0.58,
+        "exTe": -0.58
+      }
+    ]
+  },
+  "h20": {
+    "factors": 102,
+    "trainSignificant": 1,
+    "trainSigAndTestSameSignSig": 0,
+    "expectedByChance": 0.3,
+    "netPositiveBothHalves": [],
+    "top15": [
+      {
+        "f": "nearLow252",
+        "icTr": 0.0582,
+        "tTr": 2.2,
+        "icTe": -0.0047,
+        "tTe": -0.1,
+        "exTr": 0.6,
+        "exTe": -0.35
+      },
+      {
+        "f": "vol5",
+        "icTr": 0.0466,
+        "tTr": 1.9,
+        "icTe": 0.0776,
+        "tTe": 2.6,
+        "exTr": 0.28,
+        "exTe": -0.07
+      },
+      {
+        "f": "nearLow126",
+        "icTr": 0.0456,
+        "tTr": 1.8,
+        "icTe": 0.0113,
+        "tTe": 0.3,
+        "exTr": 0.39,
+        "exTe": -0.16
+      },
+      {
+        "f": "beta60",
+        "icTr": 0.0628,
+        "tTr": 1.7,
+        "icTe": 0.0332,
+        "tTe": 0.7,
+        "exTr": -0.11,
+        "exTe": -0.29
+      },
+      {
+        "f": "maxDD20",
+        "icTr": -0.0441,
+        "tTr": -1.7,
+        "icTe": 0.0185,
+        "tTe": 0.5,
+        "exTr": 0.03,
+        "exTe": -0.52
+      },
+      {
+        "f": "nearLow10",
+        "icTr": 0.0349,
+        "tTr": 1.7,
+        "icTe": 0.0258,
+        "tTe": 0.8,
+        "exTr": 0.3,
+        "exTe": 0.31
+      },
+      {
+        "f": "nearHigh55",
+        "icTr": -0.0424,
+        "tTr": -1.6,
+        "icTe": -0.0126,
+        "tTe": -0.4,
+        "exTr": -0.37,
+        "exTe": -0.59
+      },
+      {
+        "f": "atrPct5",
+        "icTr": 0.0495,
+        "tTr": 1.6,
+        "icTe": 0.0576,
+        "tTe": 1.7,
+        "exTr": 0.36,
+        "exTe": 0.29
+      },
+      {
+        "f": "ret252_skip21",
+        "icTr": 0.0556,
+        "tTr": 1.6,
+        "icTe": -0.0163,
+        "tTe": -0.4,
+        "exTr": 0.52,
+        "exTe": -0.79
+      },
+      {
+        "f": "volRatio20_60",
+        "icTr": -0.0287,
+        "tTr": -1.6,
+        "icTe": 0.0221,
+        "tTe": 0.8,
+        "exTr": 0,
+        "exTe": -0.52
+      },
+      {
+        "f": "maxRet60",
+        "icTr": 0.0424,
+        "tTr": 1.5,
+        "icTe": -0.0068,
+        "tTe": -0.2,
+        "exTr": 0.48,
+        "exTe": -0.74
+      },
+      {
+        "f": "ret252",
+        "icTr": 0.0513,
+        "tTr": 1.4,
+        "icTe": -0.0113,
+        "tTe": -0.3,
+        "exTr": 0.37,
+        "exTe": -0.78
+      },
+      {
+        "f": "ret60_skip21",
+        "icTr": 0.0365,
+        "tTr": 1.4,
+        "icTe": -0.0269,
+        "tTe": -0.9,
+        "exTr": 0.17,
+        "exTe": -0.69
+      },
+      {
+        "f": "nearHigh20",
+        "icTr": -0.0358,
+        "tTr": -1.4,
+        "icTe": 0.0002,
+        "tTe": 0,
+        "exTr": -0.32,
+        "exTe": -0.36
+      },
+      {
+        "f": "corrNifty60",
+        "icTr": 0.0346,
+        "tTr": 1.4,
+        "icTe": 0.0183,
+        "tTe": 0.6,
+        "exTr": -0.91,
+        "exTe": -0.67
+      }
+    ]
+  }
+}
