@@ -163,3 +163,10 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - 15m candle test (analysis/autopsy_15m.mjs, resampled from 5m, hold 30min): see analysis/autopsy_15m_summary.json
 - VWAP-breach exit fix test (15m, research only): buffer 0.05/0.3/0.6/1.0%/off -> PF 0.28-0.30, test -0.24 to -0.25R. MIN_SCORE 75/85, MIN_ATRPCT 0.5, HOLD 4 bars, TGT 0.6: PF 0.25-0.53, all net negative. Breach exits are a symptom (trade starts ~-0.4R after cost/slippage), not the cause. Nothing passes the gate (PF>=1.3).
 - factor_scan.mjs (102 daily price/volume factors, non-overlapping 5d/20d fwd, train<=2023 test 2024+): see analysis/factor_scan_summary.json. Research only.
+
+## Live paper day 2026-10-19 - final summary (research only, one day is not proof)
+- 15m LTP picker (36 stocks, top-8 by abs 15m move, direction = move): 14 evaluated slots. Mean picks fwd -0.019%, all-stock mean -0.014% (before cost). After 0.10% cost: -0.119% per slot. Per-pick hit rate (direction right) 24/112 = 21%; only 1 of 14 slots beat +0.1%. Best slot 11:17 (+0.131%), worst 11:54 (-0.218%).
+- Server engine: 3 calls, 3 exits, dayR -1.23R (SBIN BUY VWAP-breach -0.70R, ITC -0.48R, SBIN SELL -0.04R). Angel candle API refused repeatedly (health down) and caused skipped stocks.
+- Same-day journal: page + engine both entered SBIN BUY (double exposure) -> ownerGuard added (commit 95685e3, 9a54a07).
+- Backtests agree: 5m PF 0.25, 15m PF 0.28, VWAP-exit variants PF<=0.30, 102 daily factors: none survive test half.
+- Next research-only ideas (gate: PF>=1.3 both halves, n>=100): (1) point-in-time fundamentals (results surprise, margin trend) once a clean source exists, (2) event drift around results dates, (3) candle API cache fix so engine does not skip. None goes live before passing the gate.
