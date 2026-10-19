@@ -161,3 +161,4 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Added: lib/dailyReport.js + GET /api/report?day= - read-only daily summary (journal + picker). No edge claims.
 - ownerGuard: added day loss limit (-3R, all sources) for page calls, same as engine.
 - 15m candle test (analysis/autopsy_15m.mjs, resampled from 5m, hold 30min): see analysis/autopsy_15m_summary.json
+- VWAP-breach exit fix test (15m, research only): buffer 0.05/0.3/0.6/1.0%/off -> PF 0.28-0.30, test -0.24 to -0.25R. MIN_SCORE 75/85, MIN_ATRPCT 0.5, HOLD 4 bars, TGT 0.6: PF 0.25-0.53, all net negative. Breach exits are a symptom (trade starts ~-0.4R after cost/slippage), not the cause. Nothing passes the gate (PF>=1.3).
