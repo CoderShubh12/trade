@@ -159,3 +159,4 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Already existed: Data Health (watchdog), backup, integrity, exposure guard (engine), candle cache/single-flight/backoff. Angel 403 is on Angel's side.
 - Added: lib/ownerGuard.js - /api/journal POST now applies exposure limits (all sources) to NEW page calls (409 when blocked), so page and engine cannot double up.
 - Added: lib/dailyReport.js + GET /api/report?day= - read-only daily summary (journal + picker). No edge claims.
+- ownerGuard: added day loss limit (-3R, all sources) for page calls, same as engine.
