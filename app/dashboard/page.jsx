@@ -95,6 +95,7 @@ export default function Hundred() {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
   const [health, setHealth] = useState(null);
+  const [picks, setPicks] = useState(null);
   useEffect(() => {
     let off = false;
     const load = () => fetch('/api/journal', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off) { setItems(j.items || []); setErr(''); } }).catch((e) => { if (!off) setErr(String(e.message || e)); });
@@ -106,6 +107,14 @@ export default function Hundred() {
   useEffect(() => {
     let off = false;
     const load = () => fetch('/api/health', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off && j.success) setHealth(j); }).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { off = true; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let off = false;
+    const load = () => fetch('/api/picks', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off && j.success) setPicks(j); }).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => { off = true; clearInterval(t); };
@@ -151,6 +160,36 @@ export default function Hundred() {
           ))}
         </div>
       ) : null}
+
+      <Card title="TODAY'S PICKS AND TRADES (research view, not signals)">
+        {(() => {
+          const day = picks?.day;
+          const todays = (items || []).filter((t) => t.dateStr === day).sort((x, y) => (parseInt(x.id, 10) || 0) - (parseInt(y.id, 10) || 0));
+          const last = (picks?.snaps || []).filter((x) => x.picks.length).slice(-1)[0];
+          const ev = picks?.evals || [];
+          const mean = (k) => (ev.length ? ev.reduce((a, e) => a + (e[k] || 0), 0) / ev.length : null);
+          return (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Latest 15-min picks (relative move vs Nifty){last ? ` at ${last.clock}` : ''}: ▲ = moving up, ▼ = moving down</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {last ? last.picks.map((p) => (<span key={p.n} style={{ padding: '3px 10px', borderRadius: 12, border: '1px solid var(--border-color)', color: p.dir > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.n} {p.dir > 0 ? '▲' : '▼'} {fx(p.rs)}%</span>)) : <span style={{ color: 'var(--text-muted)' }}>No picks logged yet today.</span>}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                Picks result after 15 min, before costs ({ev.length} slots): picks {mean('picksFwd') == null ? '–' : fx(mean('picksFwd'), 3) + '%'} vs all watched stocks {mean('allFwd') == null ? '–' : fx(mean('allFwd'), 3) + '%'}. Costs are about 0.10%, so this is not an edge.
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Trades today ({todays.length})</div>
+              {todays.length ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr style={{ color: 'var(--text-muted)', textAlign: 'right' }}><th style={{ textAlign: 'left' }}>Time</th><th style={{ textAlign: 'left' }}>Stock</th><th>Side</th><th>In</th><th>Out</th><th style={{ textAlign: 'left', paddingLeft: 8 }}>Why</th><th>R (gross)</th></tr></thead>
+                  <tbody>{todays.map((t) => (<tr key={t.id} style={{ textAlign: 'right', borderTop: '1px solid var(--border-color)' }}>
+                    <td style={{ textAlign: 'left' }}>{t.entryClock}</td><td style={{ textAlign: 'left' }}>{t.symbol}</td><td>{t.side}</td><td>{fx(t.entry)}</td><td>{t.exitPrice != null ? fx(t.exitPrice) : 'open'}</td>
+                    <td style={{ textAlign: 'left', paddingLeft: 8 }}>{t.source === 'engine' ? '[engine] ' : ''}{t.reason || ''}</td><td style={{ color: sgn(t.r) }}>{Number.isFinite(t.r) ? fx(t.r) : '–'}</td></tr>))}</tbody>
+                </table>
+              ) : <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>No trades today yet.</span>}
+            </div>
+          );
+        })()}
+      </Card>
 
       <Card title="PROGRESS">
         <div style={{ fontSize: 28, fontWeight: 700 }}>{all.n} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>/ {GATE.n} closed paper trades</span></div>

@@ -144,3 +144,8 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Each day at 09:30 (using only 09:15-09:25 bars + prev close) rank 42 stocks, trade only the top 5 that day with the terminal's own rules.
 - Net R/trade (all / test): rvol -0.26/-0.25, gap -0.30/-0.29, move -0.29/-0.23, rs same as move, combo(rvol+rs+range) -0.29/-0.28, RANDOM 5 -0.28/-0.20. PF 0.27-0.45.
 - No picker beats random picking; every one is net negative. Dynamic picking does not fix the entry/exit rules.
+
+## Dashboard: today's picks and trades (2026-10-19)
+- /dashboard now has a "TODAY'S PICKS AND TRADES" card: latest 15-min picker list + picks-vs-all result + today's journal trades. Data: new /api/picks (data/picker-log.json, today only, research-only, login required).
+- Found: the open terminal page (source "page") and the server engine both entered SBIN a minute apart (09:35 page, 09:40 engine) = double exposure. Needs one-owner rule (engine off while the page auto-trades, or vice versa).
+- Found: Angel candle API 403s block the engine (ITC skipped repeatedly) -> needs cache + backoff.
