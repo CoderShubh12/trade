@@ -149,3 +149,8 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - /dashboard now has a "TODAY'S PICKS AND TRADES" card: latest 15-min picker list + picks-vs-all result + today's journal trades. Data: new /api/picks (data/picker-log.json, today only, research-only, login required).
 - Found: the open terminal page (source "page") and the server engine both entered SBIN a minute apart (09:35 page, 09:40 engine) = double exposure. Needs one-owner rule (engine off while the page auto-trades, or vice versa).
 - Found: Angel candle API 403s block the engine (ITC skipped repeatedly) -> needs cache + backoff.
+
+## Reversal alert bot (2026-10-19)
+- lib/reversalBot.js (pure detector) + /api/reversal (samples NIFTY/BANKNIFTY live LTP) + dashboard card. Alert only, never trades.
+- Replay (analysis/reversal_replay.mjs, 63 days index 5m): 20-86 alerts per config. Index did NOT continue in the alert direction: 30-min forward move about -0.03% (NIFTY f30 -0.026%, BANKNIFTY -0.035%), negative in both train and test halves. Typical 30-min move is 0.09-0.11%, so alerts carry no directional edge. Use as heads-up only.
+- Limit: it only samples while /dashboard (or any caller of /api/reversal) is open. Next: let serverEngine call it every tick; Telegram delivery.

@@ -96,6 +96,7 @@ export default function Hundred() {
   const [err, setErr] = useState('');
   const [health, setHealth] = useState(null);
   const [picks, setPicks] = useState(null);
+  const [rev, setRev] = useState(null);
   useEffect(() => {
     let off = false;
     const load = () => fetch('/api/journal', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off) { setItems(j.items || []); setErr(''); } }).catch((e) => { if (!off) setErr(String(e.message || e)); });
@@ -117,6 +118,14 @@ export default function Hundred() {
     const load = () => fetch('/api/picks', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off && j.success) setPicks(j); }).catch(() => {});
     load();
     const t = setInterval(load, 30000);
+    return () => { off = true; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let off = false;
+    const load = () => fetch('/api/reversal', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!off && j.success) setRev(j); }).catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
     return () => { off = true; clearInterval(t); };
   }, []);
 
@@ -161,6 +170,20 @@ export default function Hundred() {
         </div>
       ) : null}
 
+      <Card title="REVERSAL ALERTS (alert only, not a trade signal)">
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+          Watches NIFTY and BANKNIFTY: a 0.5% move from the day high/low, then a 0.2% turn. {rev?.marketOpen ? 'Live now.' : 'Market closed.'} Keep this page open to keep watching.
+          {rev?.range?.NIFTY ? ` Nifty range today ${rev.range.NIFTY.low}–${rev.range.NIFTY.high}.` : ''}
+        </div>
+        {rev?.alerts?.length ? (
+          <div>{[...rev.alerts].reverse().map((a, i) => (
+            <div key={i} style={{ padding: '6px 0', borderTop: '1px solid var(--border-color)', fontSize: 13, color: a.dir === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+              {a.clock} {a.index} {a.dir === 'UP' ? '▲ bounce' : '▼ fade'} at {a.price}: <span style={{ color: 'var(--text-main)' }}>{a.note}</span>
+            </div>))}</div>
+        ) : <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>No reversal alert yet today.</span>}
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>{rev?.note}</div>
+      </Card>
+
       <Card title="TODAY'S PICKS AND TRADES (research view, not signals)">
         {(() => {
           const day = picks?.day;
@@ -170,12 +193,12 @@ export default function Hundred() {
           const mean = (k) => (ev.length ? ev.reduce((a, e) => a + (e[k] || 0), 0) / ev.length : null);
           return (
             <div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Latest 15-min picks (relative move vs Nifty){last ? ` at ${last.clock}` : ''}: ▲ = moving up, ▼ = moving down</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Latest 15-min picks (most volatile = biggest 15-min move, paper only; 36 stocks){last ? ` at ${last.clock}` : ''}: ▲ = moving up, ▼ = moving down</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                 {last ? last.picks.map((p) => (<span key={p.n} style={{ padding: '3px 10px', borderRadius: 12, border: '1px solid var(--border-color)', color: p.dir > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.n} {p.dir > 0 ? '▲' : '▼'} {fx(p.rs)}%</span>)) : <span style={{ color: 'var(--text-muted)' }}>No picks logged yet today.</span>}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                Picks result after 15 min, before costs ({ev.length} slots): picks {mean('picksFwd') == null ? '–' : fx(mean('picksFwd'), 3) + '%'} vs all watched stocks {mean('allFwd') == null ? '–' : fx(mean('allFwd'), 3) + '%'}. Costs are about 0.10%, so this is not an edge.
+                Next-15-min result of picks, in the direction of the move, before costs ({ev.length} slots): picks {mean('picksFwd') == null ? '–' : fx(mean('picksFwd'), 3) + '%'} vs all watched stocks {mean('allFwd') == null ? '–' : fx(mean('allFwd'), 3) + '%'}. Costs are about 0.10%, so this is not an edge.
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Trades today ({todays.length})</div>
               {todays.length ? (
