@@ -154,3 +154,8 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - lib/reversalBot.js (pure detector) + /api/reversal (samples NIFTY/BANKNIFTY live LTP) + dashboard card. Alert only, never trades.
 - Replay (analysis/reversal_replay.mjs, 63 days index 5m): 20-86 alerts per config. Index did NOT continue in the alert direction: 30-min forward move about -0.03% (NIFTY f30 -0.026%, BANKNIFTY -0.035%), negative in both train and test halves. Typical 30-min move is 0.09-0.11%, so alerts carry no directional edge. Use as heads-up only.
 - Limit: it only samples while /dashboard (or any caller of /api/reversal) is open. Next: let serverEngine call it every tick; Telegram delivery.
+
+## Helper bots audit + additions (2026-10-19)
+- Already existed: Data Health (watchdog), backup, integrity, exposure guard (engine), candle cache/single-flight/backoff. Angel 403 is on Angel's side.
+- Added: lib/ownerGuard.js - /api/journal POST now applies exposure limits (all sources) to NEW page calls (409 when blocked), so page and engine cannot double up.
+- Added: lib/dailyReport.js + GET /api/report?day= - read-only daily summary (journal + picker). No edge claims.

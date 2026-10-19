@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { readJournal, updateJournal, upsertCall } from "../../../lib/journalStore.js";
 import { reconcileOpen } from "../../../lib/journalReconcile.js";
+import { checkNewCall } from "../../../lib/ownerGuard.js";
 
 export const dynamic = "force-dynamic";
 async function read() { return readJournal(); }
@@ -65,6 +66,8 @@ export async function POST(request) {
   let body; try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: "Bad JSON" }, { status: 400 }); }
   const item = clean(body);
   if (!item) return NextResponse.json({ success: false, error: "Rejected (replay or invalid)" }, { status: 400 });
+  const guard = checkNewCall(await read(), item);
+  if (!guard.allowed) return NextResponse.json({ success: false, blocked: true, code: guard.code, error: guard.reason }, { status: 409 });
   await upsertCall(item);
   return NextResponse.json({ success: true });
 }
