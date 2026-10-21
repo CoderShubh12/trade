@@ -16,7 +16,7 @@ g.__angelQueueTail = g.__angelQueueTail || Promise.resolve();
 g.__angelLastCall = g.__angelLastCall || 0;
 
 const FRESH_MS = 12000; // serve from cache this long
-const STALE_OK_MS = 180000; // on Angel errors, serve older data up to 3 min (flagged)
+const STALE_OK_MS = 600000; // on Angel errors, serve older data up to 10 min (flagged)
 const MIN_GAP_MS = 700; // Angel allows ~3 historical calls/second; stay under it
 
 const INTERVAL_MAP = { 1: "ONE_MINUTE", 3: "THREE_MINUTE", 5: "FIVE_MINUTE", 15: "FIFTEEN_MINUTE" };
@@ -82,11 +82,11 @@ async function fetchCandles(token, tf) {
   } catch (e) {
     const code = e.response?.status;
     if (code === 403 || code === 429) {
-      // Escalating back-off: 10s, 20s, 40s, then 60s while Angel keeps refusing; resets on the first success.
+      // Angel says "Access denied because of exceeding access rate" (confirmed 21 Oct): the limit is real, not a dead login.
+      // Retrying every 10-60 s keeps the counter hot, so cool down longer: 30s, 60s, 2m, then 5m; resets on the first success.
       g.__candleFails = (g.__candleFails || 0) + 1;
-      g.__candlePauseUntil = Date.now() + Math.min(60000, 10000 * 2 ** (g.__candleFails - 1));
-      // 2+ refusals in a row may mean the cached login is dead, not just a rate limit: force a fresh login (max once / 2 min).
-      if (g.__candleFails >= 2) resetAngelSession();
+      const steps = [30000, 60000, 120000, 300000];
+      g.__candlePauseUntil = Date.now() + steps[Math.min(steps.length - 1, g.__candleFails - 1)];
       throw e;
     }
     if (e.code === "ECONNABORTED") {
@@ -147,7 +147,7 @@ export async function GET(request) {
       });
     }
     return NextResponse.json(
-      { success: false, error: error.response?.data?.message || error.message, data: [] },
+      { success: false, error: error.response?.data?.message || (typeof error.response?.data === "string" ? `${error.message}: ${error.response.data.slice(0, 120)}` : error.message), data: [] },
       { status: error.status === 401 ? 401 : 500 },
     );
   }
