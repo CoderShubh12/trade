@@ -5,7 +5,7 @@
 //  - all Angel calls go through one queue, spaced apart
 import { NextResponse } from "next/server";
 import axios from "axios";
-import { getAngelSession } from "@/lib/angelAuth";
+import { getAngelSession, resetAngelSession } from "@/lib/angelAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +85,8 @@ async function fetchCandles(token, tf) {
       // Escalating back-off: 10s, 20s, 40s, then 60s while Angel keeps refusing; resets on the first success.
       g.__candleFails = (g.__candleFails || 0) + 1;
       g.__candlePauseUntil = Date.now() + Math.min(60000, 10000 * 2 ** (g.__candleFails - 1));
+      // 2+ refusals in a row may mean the cached login is dead, not just a rate limit: force a fresh login (max once / 2 min).
+      if (g.__candleFails >= 2) resetAngelSession();
       throw e;
     }
     if (e.code === "ECONNABORTED") {
