@@ -195,6 +195,22 @@ await test("Exposure guard: max 2 open, max 2 in one direction, day cap 6", () =
   eq(checkExposure({ ...b, open: [{ action: "BUY" }, { action: "BUY" }] }, r2).code, "SAME_DIR", "2 BUY open blocks a 3rd BUY");
   eq(checkExposure({ ...b, side: "SELL", open: [{ action: "BUY" }, { action: "BUY" }] }, r2).allowed, true, "a SELL is fine against 2 BUY");
 });
+// ---------------------------------------------------------------- single-owner guard (page calls)
+await test("Owner guard: new page call obeys the same limits across page + engine rows; updates pass; orphan exits and day loss are blocked", async () => {
+  const { checkNewCall } = await import("../lib/ownerGuard.js");
+  const d = "2026-10-21";
+  const row = (id, symbol, side, extra = {}) => ({ id, symbol, side, dateStr: d, exitPrice: null, ...extra });
+  const nu = (symbol, side, extra = {}) => ({ id: "new-" + symbol, symbol, side, dateStr: d, exitPrice: null, ...extra });
+  eq(checkNewCall([], nu("A", "BUY")).allowed, true, "empty book");
+  eq(checkNewCall([row("1", "A", "BUY"), row("2", "B", "BUY", { source: "engine" })], nu("C", "SELL")).code, "MAX_OPEN", "2 open (page+engine) blocks a 3rd");
+  eq(checkNewCall([row("1", "A", "BUY")], nu("A", "SELL")).code, "SYMBOL_OPEN", "same symbol already open");
+  eq(checkNewCall([row("1", "A", "BUY")], { ...nu("A", "BUY"), id: "1" }).code, "UPDATE", "same id is an update");
+  eq(checkNewCall([row("1", "A", "BUY")], nu("Z", "BUY", { exitPrice: 5, r: -1 })).code, "ORPHAN_EXIT", "exit without entry is rejected");
+  eq(checkNewCall([row("1", "A", "BUY", { exitPrice: 1, r: 0.5 })], { ...nu("A", "BUY"), id: "1", exitPrice: 2 }).code, "UPDATE", "closing a stored call passes");
+  const lost = [row("1", "A", "BUY", { exitPrice: 1, r: -1.7 }), row("2", "B", "SELL", { exitPrice: 1, r: -1.4 })];
+  eq(checkNewCall(lost, nu("C", "BUY")).code, "DAY_LOSS", "-3.1R today blocks new calls");
+  eq(checkNewCall([row("1", "A", "BUY", { exitPrice: 1, r: -2 })], nu("C", "BUY")).allowed, true, "-2R is still inside the -3R limit");
+});
 await test("Exposure guard: 3 losses in a row on a stock today block it; a win in between does not", () => {
   const b = { side: "BUY", open: [], callsToday: 3, niftyPct: 0 };
   eq(checkExposure({ ...b, stockResults: ["L", "L", "L"] }).code, "STOCK_STREAK", "LLL");

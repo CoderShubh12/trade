@@ -170,3 +170,4 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Same-day journal: page + engine both entered SBIN BUY (double exposure) -> ownerGuard added (commit 95685e3, 9a54a07).
 - Backtests agree: 5m PF 0.25, 15m PF 0.28, VWAP-exit variants PF<=0.30, 102 daily factors: none survive test half.
 - Next research-only ideas (gate: PF>=1.3 both halves, n>=100): (1) point-in-time fundamentals (results surprise, margin trend) once a clean source exists, (2) event drift around results dates, (3) candle API cache fix so engine does not skip. None goes live before passing the gate.
+- Bugfix 2026-10-21: page now re-checks engine flag every 30s (was once at mount, so page+engine both journaled); ownerGuard rejects orphan exits (exit for a call whose entry was blocked); backfilled token 3045 on 2 old SBIN rows (backup data/paper-journal.before-token-fix.json); selftest 29/29.

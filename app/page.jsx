@@ -324,7 +324,11 @@ export default function DashboardPage() {
   // When the SERVER engine is on it records calls/exits itself; this page must not journal the same call again.
   const serverEngineOn = useRef(false);
   useEffect(() => {
-    fetch("/api/engine").then((r) => r.json()).then((j) => { serverEngineOn.current = !!(j && j.enabled); }).catch(() => {});
+    // Re-check every 30 s: the engine can be switched on/off or the server restarted while this tab stays open.
+    const check = () => fetch("/api/engine").then((r) => r.json()).then((j) => { serverEngineOn.current = !!(j && j.enabled); }).catch(() => {});
+    check();
+    const t = setInterval(check, 30000);
+    return () => clearInterval(t);
   }, []);
   useEffect(() => {
     if (serverEngineOn.current) return;
