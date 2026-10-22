@@ -140,6 +140,17 @@ export async function GET(request) {
     return NextResponse.json({ success: true, data, source: "ANGEL_ONE_LIVE" });
   } catch (error) {
     console.error("Angel API Error:", error.response?.status || "", error.response?.data || error.message);
+    // Angel refused but we hold older Angel candles: bring them up to date with bars built from live quotes (real prices;
+    // the first partial tick bar is skipped). Flagged `merged`, so nothing downstream mistakes it for pure Angel data.
+    if (cached && tf === "5" && Date.now() - cached.timestamp < STALE_OK_MS) {
+      const tc = getTickCandles(token);
+      const useFrom = tc.length > 1 ? tc[1].time : null; // tc[0] may be a partial bar (sampling started mid-bar)
+      const last = cached.data[cached.data.length - 1];
+      if (useFrom && last && useFrom <= last.time + 600) {
+        const merged = [...cached.data.filter((b) => b.time < useFrom), ...tc.filter((b) => b.time >= useFrom)];
+        return NextResponse.json({ success: true, data: merged, merged: true, source: "ANGEL_PLUS_TICK", warning: error.message });
+      }
+    }
     if (cached && Date.now() - cached.timestamp < STALE_OK_MS) {
       return NextResponse.json({
         success: true, data: cached.data, stale: true,
