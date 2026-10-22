@@ -302,6 +302,14 @@ await test("Tick candles: quotes become 5-min OHLC bars with volume from the cum
   eq(c[0].clock, "10:00", "IST clock"); eq(c[1].clock, "10:05", "next bar");
   eq(c[1].volume, 800, "bar volume = 2600 - 1800");
 });
+await test("Tick candles: a sampling gap drops the bars before it (no fake continuous series)", async () => {
+  const { recordTick, getTickCandles } = await import("../lib/tickCandles.js");
+  const t0 = Math.floor(ist(2026, 10, 22, 11, 0) / 300000) * 300000;
+  for (const k of [0, 1, 2, 5, 6]) recordTick("T2", 100 + k, 100 * (k + 1), t0 + k * 300000 + 1000); // bars 3 and 4 missing
+  const c = getTickCandles("T2");
+  eq(c.length, 2, "only the run after the gap");
+  eq(c[0].clock, "11:25", "starts after the hole");
+});
 
 const failed = results.filter((r) => !r[1]);
 console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} FAILED: ${failed.map((f) => f[0]).join(" | ")}` : ""}`);
