@@ -36,10 +36,10 @@ await test("IST helper: UTC time maps to the right IST date and clock", () => {
   eq(b.dateStr, "2026-10-15", "date rolls over after 18:30 UTC"); eq(b.hhmm, 30, "hhmm");
   eq(getIstParts(ist(2026, 10, 17, 10)).day, 6, "17 Oct 2026 is a Saturday");
 });
-await test("Trade window: 09:30-11:30 and 13:30-14:45 only, nothing from 15:15", () => {
+await test("Trade window: whole session 09:30-14:45 (owner request 22 Oct), nothing before 09:30 or from 14:46 / 15:15", () => {
   const w = (h, m) => getTradeWindowStatus(ist(2026, 10, 14, h, m)).allowed;
-  eq(w(9, 20), false, "09:20"); eq(w(9, 30), true, "09:30"); eq(w(11, 30), true, "11:30"); eq(w(11, 31), false, "11:31");
-  eq(w(12, 30), false, "12:30"); eq(w(13, 30), true, "13:30"); eq(w(14, 45), true, "14:45"); eq(w(14, 46), false, "14:46"); eq(w(15, 15), false, "15:15");
+  eq(w(9, 20), false, "09:20"); eq(w(9, 30), true, "09:30"); eq(w(11, 30), true, "11:30"); eq(w(11, 31), true, "11:31");
+  eq(w(12, 30), true, "12:30"); eq(w(13, 30), true, "13:30"); eq(w(14, 45), true, "14:45"); eq(w(14, 46), false, "14:46"); eq(w(15, 15), false, "15:15");
 });
 
 // ---------------------------------------------------------------- exit logic (monitorActiveTrade)
@@ -101,9 +101,9 @@ await test("Entry: score <= -65 gives SELL; Nifty bias against the side blocks t
   eq((await evaluateTradeSetup(70, "BEARISH", candle, 100, 2, { nowMs: now })).action, "WAIT", "buy vs bearish nifty");
   eq((await evaluateTradeSetup(-70, "BULLISH", candle, 100, 2, { nowMs: now })).action, "WAIT", "sell vs bullish nifty");
 });
-await test("Entry: weak score or outside the window gives WAIT", async () => {
+await test("Entry: weak score or outside the session (before 09:30 / after 14:45) gives WAIT", async () => {
   eq((await evaluateTradeSetup(60, "NEUTRAL", candle, 100, 2, { nowMs: ist(2026, 10, 14, 10, 0) })).action, "WAIT", "weak score");
-  eq((await evaluateTradeSetup(80, "NEUTRAL", candle, 100, 2, { nowMs: ist(2026, 10, 14, 12, 30) })).action, "WAIT", "midday");
+  eq((await evaluateTradeSetup(80, "NEUTRAL", candle, 100, 2, { nowMs: ist(2026, 10, 14, 15, 0) })).action, "WAIT", "after 14:45");
 });
 
 // ---------------------------------------------------------------- signal memory
