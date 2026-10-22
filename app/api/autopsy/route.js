@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { readJournal } from "../../../lib/journalStore.js";
+import { requestUser } from "../../../lib/userScope.js";
 import { autopsyTrade } from "../../../lib/autopsy.js";
 import { GET as candlesGET } from "../market-data/route.js";
 
@@ -61,7 +62,7 @@ export async function GET(request) {
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 30));
   const live = searchParams.get("live") !== "0";
   try {
-    const journal = (await readJournal()).filter((t) => t && t.exitPrice != null && t.entry > 0).slice(-limit).reverse();
+    const journal = (await readJournal(requestUser(request))).filter((t) => t && t.exitPrice != null && t.entry > 0).slice(-limit).reverse();
     const store = {};                 // symbol -> { candles, token, liveTried }
     let liveCalls = 0;
     const trades = [], skipped = [];

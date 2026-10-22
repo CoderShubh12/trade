@@ -3,6 +3,7 @@
 // cookie, except the login page and /api/auth/*.
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
+import { safeUser } from "@/lib/userScope";
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
@@ -26,9 +27,12 @@ export async function middleware(request) {
     }
     return NextResponse.redirect(new URL("/login", request.url));
   }
-  return NextResponse.next();
+  // Tell the routes who is logged in. Always overwrite: a client-sent x-app-user must never be trusted.
+  const headers = new Headers(request.headers);
+  headers.set("x-app-user", safeUser(session.username));
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {
-  matcher: ["/", "/tips/:path*", "/dashboard/:path*", "/research/:path*", "/autopsy/:path*", "/login", "/api/:path*"],
+  matcher: ["/", "/tips/:path*", "/dashboard/:path*", "/research/:path*", "/autopsy/:path*", "/breakouts/:path*", "/login", "/api/:path*"],
 };

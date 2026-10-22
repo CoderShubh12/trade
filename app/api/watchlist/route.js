@@ -4,13 +4,14 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { userFile, requestUser } from "@/lib/userScope";
 
 export const dynamic = "force-dynamic";
 
-const FILE = path.join(process.cwd(), "data", "watchlist.json");
+const fileOf = (request) => userFile(requestUser(request), "watchlist.json"); // owner keeps data/watchlist.json (the engine reads it)
 const MAX_ITEMS = 100;
 
-async function readList() {
+async function readList(FILE) {
   try {
     const raw = await fs.readFile(FILE, "utf8");
     const parsed = JSON.parse(raw);
@@ -20,7 +21,7 @@ async function readList() {
   }
 }
 
-async function writeList(list) {
+async function writeList(list, FILE) {
   await fs.mkdir(path.dirname(FILE), { recursive: true });
   const tmp = FILE + ".tmp";
   await fs.writeFile(tmp, JSON.stringify(list, null, 2), "utf8");
@@ -52,8 +53,8 @@ function clean(body) {
   };
 }
 
-export async function GET() {
-  return NextResponse.json({ success: true, items: await readList() });
+export async function GET(request) {
+  return NextResponse.json({ success: true, items: await readList(fileOf(request)) });
 }
 
 export async function POST(request) {
@@ -68,7 +69,8 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: "Invalid symbol/token" }, { status: 400 });
   }
 
-  const list = await readList();
+  const FILE = fileOf(request);
+  const list = await readList(FILE);
   const idx = list.findIndex((x) => x.token === item.token);
   if (idx >= 0) {
     // Already there: a new tool call refreshes the levels, a manual add changes nothing.
@@ -79,7 +81,7 @@ export async function POST(request) {
     }
     list.unshift(item);
   }
-  await writeList(list);
+  await writeList(list, FILE);
   return NextResponse.json({ success: true, items: list });
 }
 
@@ -88,7 +90,8 @@ export async function DELETE(request) {
   if (!/^\d+$/.test(token)) {
     return NextResponse.json({ success: false, error: "Invalid token" }, { status: 400 });
   }
-  const list = (await readList()).filter((x) => x.token !== token);
-  await writeList(list);
+  const FILE = fileOf(request);
+  const list = (await readList(FILE)).filter((x) => x.token !== token);
+  await writeList(list, FILE);
   return NextResponse.json({ success: true, items: list });
 }

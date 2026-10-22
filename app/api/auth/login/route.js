@@ -11,6 +11,7 @@ import {
   createSessionToken,
   isSecretOk,
 } from "@/lib/session";
+import { loadUsers } from "@/lib/userScope";
 
 // Compare without leaking how many characters matched
 const sha = (s) => createHash("sha256").update(String(s)).digest();
@@ -29,12 +30,11 @@ function tooManyTries(ip) {
 }
 
 export async function POST(request) {
-  const user = process.env.APP_LOGIN_USER;
-  const pass = process.env.APP_LOGIN_PASSWORD;
+  const users = loadUsers(); // owner + up to 4 more (APP_USERS="name:password;name2:password2")
   const secret = process.env.APP_SESSION_SECRET;
 
   // Fail closed: if the server is not configured, nobody gets in.
-  if (!user || !pass || !isSecretOk(secret)) {
+  if (!users.length || !isSecretOk(secret)) {
     return NextResponse.json(
       {
         success: false,
@@ -60,17 +60,21 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: "Bad request" }, { status: 400 });
   }
 
-  // Check both fields every time so timing does not reveal which was wrong
-  const userOk = same(body?.username ?? "", user);
-  const passOk = same(body?.password ?? "", pass);
-  if (!(userOk && passOk)) {
+  // Check every account every time so timing does not reveal which name or password was wrong
+  let found = null;
+  for (const u of users) {
+    const userOk = same(body?.username ?? "", u.name);
+    const passOk = same(body?.password ?? "", u.pass);
+    if (userOk && passOk && !found) found = u;
+  }
+  if (!found) {
     attempts.get(ip).push(Date.now());
     return NextResponse.json({ success: false, error: "Invalid credentials" }, { status: 401 });
   }
 
   attempts.delete(ip);
-  const token = await createSessionToken({ username: user, role: "admin" }, secret);
-  const response = NextResponse.json({ success: true, role: "admin" });
+  const token = await createSessionToken({ username: found.name, role: found.role === "owner" ? "admin" : "user" }, secret);
+  const response = NextResponse.json({ success: true, role: found.role === "owner" ? "admin" : "user" });
   response.cookies.set({
     name: SESSION_COOKIE,
     value: token,

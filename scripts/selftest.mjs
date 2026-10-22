@@ -310,6 +310,22 @@ await test("Tick candles: a sampling gap drops the bars before it (no fake conti
   eq(c.length, 2, "only the run after the gap");
   eq(c[0].clock, "11:25", "starts after the hole");
 });
+// ---------------------------------------------------------------- multi-user separation
+await test("Users: up to 5 logins, owner keeps data/, others get their own folder, journals never mix", async () => {
+  const { loadUsers, userFile, MAX_USERS } = await import("../lib/userScope.js");
+  const env = { APP_LOGIN_USER: "Owner", APP_LOGIN_PASSWORD: "p0", APP_USERS: "amit:p1;ravi:p2;neha:p3;sam:p4;extra:p5;owner:dup" };
+  const u = loadUsers(env);
+  eq(u.length, MAX_USERS, "max 5 users"); eq(u[0].role, "owner", "owner first"); ok(!u.some((x) => x.name === "extra"), "6th user refused");
+  process.env.APP_LOGIN_USER = "Owner";
+  ok(userFile("owner", "paper-journal.json").endsWith(path.join("data", "paper-journal.json")), "owner file unchanged");
+  ok(userFile("amit", "paper-journal.json").includes(path.join("data", "users", "amit")), "amit has own folder");
+  ok(userFile("../../etc", "x.json").includes("etc") && !userFile("../../etc", "x.json").includes(".."), "name is sanitised, no path escape");
+  const { upsertCall, readJournal } = await import("../lib/journalStore.js");
+  const call = { id: "u-1", symbol: "TEST", side: "BUY", entry: 100, dateStr: "2026-10-22", entryClock: "10:00" };
+  await upsertCall(call, "ravi");
+  eq((await readJournal("ravi")).length, 1, "ravi sees his call");
+  eq((await readJournal("amit")).length, 0, "amit does not see ravi's call");
+});
 
 const failed = results.filter((r) => !r[1]);
 console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} FAILED: ${failed.map((f) => f[0]).join(" | ")}` : ""}`);

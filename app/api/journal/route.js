@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 import { readJournal, updateJournal, upsertCall } from "../../../lib/journalStore.js";
 import { reconcileOpen } from "../../../lib/journalReconcile.js";
 import { checkNewCall } from "../../../lib/ownerGuard.js";
+import { requestUser } from "../../../lib/userScope.js";
 
 export const dynamic = "force-dynamic";
-async function read() { return readJournal(); }
+const read = (user) => readJournal(user);
 const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const s = (v, m) => String(v ?? "").slice(0, m);
 
@@ -33,12 +34,12 @@ function clean(b) {
   };
 }
 
-let lastRec = 0;
-async function maybeReconcile() {
-  if (Date.now() - lastRec < 120000) return;
-  lastRec = Date.now();
+const lastRecBy = new Map();
+async function maybeReconcile(user) {
+  if (Date.now() - (lastRecBy.get(user || "") || 0) < 120000) return;
+  lastRecBy.set(user || "", Date.now());
   try {
-    const found = await reconcileOpen(await read());
+    const found = await reconcileOpen(await read(user));
     if (!found.length) return;
     await updateJournal((fresh) => { // re-read under the lock: never overwrite a newer write
       let changed = false;
@@ -47,13 +48,14 @@ async function maybeReconcile() {
         if (i >= 0) { const { id, ...rest } = f; fresh[i] = { ...fresh[i], ...rest }; changed = true; }
       }
       return changed ? fresh : undefined;
-    });
+    }, user);
   } catch { /* never break the journal because of reconcile */ }
 }
 
 export async function GET(request) {
-  await maybeReconcile();
-  const list = await read();
+  const user = requestUser(request);
+  await maybeReconcile(user);
+  const list = await read(user);
   if (new URL(request.url).searchParams.get("format") === "csv") {
     const cols = ["dateStr", "entryClock", "symbol", "timeframe", "side", "entry", "stopLoss", "target1", "target2", "exitPrice", "exitClock", "reason", "r"];
     const csv = [cols.join(","), ...list.map((r) => cols.map((c) => r[c] ?? "").join(","))].join("\n");
@@ -66,8 +68,9 @@ export async function POST(request) {
   let body; try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: "Bad JSON" }, { status: 400 }); }
   const item = clean(body);
   if (!item) return NextResponse.json({ success: false, error: "Rejected (replay or invalid)" }, { status: 400 });
-  const guard = checkNewCall(await read(), item);
+  const user = requestUser(request);
+  const guard = checkNewCall(await read(user), item);
   if (!guard.allowed) return NextResponse.json({ success: false, blocked: true, code: guard.code, error: guard.reason }, { status: 409 });
-  await upsertCall(item);
+  await upsertCall(item, user);
   return NextResponse.json({ success: true });
 }

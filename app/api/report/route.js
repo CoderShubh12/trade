@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { readJournal } from "../../../lib/journalStore.js";
+import { requestUser } from "../../../lib/userScope.js";
 import { buildDailyReport } from "../../../lib/dailyReport.js";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,6 @@ export async function GET(request) {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(q || "") ? q : istDay();
   let pk = null;
   try { pk = JSON.parse(await fs.readFile(path.join(process.cwd(), "data", "picker-log.json"), "utf8")); } catch {}
-  const rep = buildDailyReport(await readJournal(), pk, day);
+  const rep = buildDailyReport(await readJournal(requestUser(request)), pk, day);
   return NextResponse.json({ success: true, report: rep });
 }
