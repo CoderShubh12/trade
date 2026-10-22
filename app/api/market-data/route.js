@@ -52,7 +52,7 @@ const fmtDay = (d) => { const p = istParts(d); return `${p.y}-${pad(p.m)}-${pad(
 
 async function callAngel(session, token, intervalStr) {
   const now = new Date();
-  const past = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000); // covers weekends/holidays
+  const past = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000); // 3 days (was 5): smaller payload; on Monday it still reaches Friday for CPR/prev-day levels
   const body = {
     exchange: "NSE",
     symboltoken: String(token),
