@@ -228,6 +228,7 @@ export default function DashboardPage() {
   //           the replay cursor in REPLAY mode.
   const [rawData, setRawData] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [thinFeed, setThinFeed] = useState(0); // >0 = only that many tick-built bars exist (Angel candles refused); no signals until 25
 
   // LIVE = real feed. REPLAY = a past real session played candle by candle
   // (works when the market is closed; clearly labelled, never mixed with live).
@@ -465,6 +466,7 @@ export default function DashboardPage() {
           json.data.length > 0
         ) {
           setRawData(json.data);
+          setThinFeed(json.tickBuilt && json.data.length < 25 ? json.data.length : 0);
           setErrorMsg(null);
         } else if (isMounted && !json.success) {
           setErrorMsg(json.error || "Awaiting Live Exchange Feed...");
@@ -708,8 +710,9 @@ export default function DashboardPage() {
     }
     const g = getLiveSignalGate(rawData, tfNum);
     const w = getTradeWindowStatus();
+    if (thinFeed > 0) return { allowed: false, inWindow: w.allowed, windowReason: w.reason, reason: `Only ${thinFeed} tick-built bars so far (need 25) - signals paused` };
     return { ...g, inWindow: w.allowed, windowReason: w.reason };
-  }, [mode, rawData, tfNum, virtualNowMs]);
+  }, [mode, rawData, tfNum, virtualNowMs, thinFeed]);
 
   // Honest feed badge (replaces the old always-green "ANGEL ONE LIVE")
   const feedBadge = useMemo(() => {
