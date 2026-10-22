@@ -177,3 +177,10 @@ Method: every 5m bar in the trade windows, both directions (213,528 samples, 42 
 - Cause of near-zero activity: Angel candle API returned 403 "exceeding access rate" most of the day (confirmed body). Engine skipped stocks while feed was down/degraded.
 - Fixes: 55618bb (longer 403 cool-down 30s..5m, 10 min stale-serve, 403 body shown), a52efaf (no candle fetch outside entry windows + 15 min warm-up), bb1524f (forced re-login after 2 refusals; not the cause, harmless).
 - Open: refusals continued even with fixes; option = tick-built candles (needs user OK). No profitability claim.
+
+## 22 Oct final live check (paper only)
+- 1 engine trade: BEL SELL @364.55 (13:55, score -71, TRENDY_MOMENTUM, SL 366.30, T1 361.63) -> exit 364.10 at 14:20 TIME_DECAY_TIMEOUT, +0.26R (engine R, before costs). Day R +0.26, 1 trade. One trade proves nothing.
+- Angel candle API returned 403 "exceeding access rate" most of the day (also after an idle night). Candle feed was effectively down from the 10:23 open until about 10:45 and again repeatedly afterwards; the engine skipped stocks while health was down/degraded.
+- Code added today (local commits, not pushed): 3-day candle request, 403 cool-down 30s..5m, queue cap 6, tick-built fallback candles, merge of Angel+tick bars, LIVE-ONLY candles (default; CANDLES_SOURCE=angel restores Angel), page paused below 25 tick bars, engine MIN_TICK_BARS 25, full-session trade window 09:30-14:45, /breakouts page (Chartink-style top 20), 5-login multi-user (per-user journal/watchlist, engine owner-only).
+- Engine process kept the OLD code all day (restart pending), so it still called Angel and used the 40-bar rule; the new engine behaviour is untested live. Restart start-app.bat, then re-test.
+- Live robust tests 12:36-13:35: all pass (APIs, pages, live bars with 0 gaps). No profit claim.
