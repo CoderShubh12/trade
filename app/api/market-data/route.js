@@ -5,6 +5,7 @@
 //  - all Angel calls go through one queue, spaced apart
 import { NextResponse } from "next/server";
 import axios from "axios";
+import { getTickCandles } from "@/lib/tickCandles";
 import { getAngelSession, resetAngelSession } from "@/lib/angelAuth";
 
 export const dynamic = "force-dynamic";
@@ -146,6 +147,9 @@ export async function GET(request) {
         warning: error.message,
       });
     }
+    // Angel refused and there is no recent cache: fall back to candles built from live quotes (flagged, never mixed with Angel's).
+    const tc = getTickCandles(token);
+    if (tf === "5" && tc.length >= 3) return NextResponse.json({ success: true, data: tc, source: "TICK_BUILT", tickBuilt: true, warning: error.message });
     return NextResponse.json(
       { success: false, error: error.response?.data?.message || (typeof error.response?.data === "string" ? `${error.message}: ${error.response.data.slice(0, 120)}` : error.message), data: [] },
       { status: error.status === 401 ? 401 : 500 },

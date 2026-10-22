@@ -289,6 +289,20 @@ await test("Autopsy: a win has no loss cause, and a time-stop loss is TIME_DECAY
   eq(dec.cause, "TIME_DECAY", "decay"); eq(dec.noiseStop, false, "not a noise stop");
 });
 
+// ---------------------------------------------------------------- tick-built fallback candles
+await test("Tick candles: quotes become 5-min OHLC bars with volume from the cumulative-volume difference", async () => {
+  process.chdir(os.tmpdir()); // keep the real data/ folder untouched
+  const { recordTick, getTickCandles } = await import("../lib/tickCandles.js");
+  const t0 = Math.floor(ist(2026, 10, 22, 10, 0) / 300000) * 300000;
+  recordTick("T1", 100, 1000, t0 + 1000); recordTick("T1", 101.5, 1200, t0 + 60000); recordTick("T1", 99.5, 1500, t0 + 120000); recordTick("T1", 100.5, 1800, t0 + 290000);
+  recordTick("T1", 100.7, 2000, t0 + 300000 + 5000); recordTick("T1", 102, 2600, t0 + 300000 + 200000);
+  const c = getTickCandles("T1");
+  eq(c.length, 2, "two bars");
+  eq(c[0].open, 100, "open"); eq(c[0].high, 101.5, "high"); eq(c[0].low, 99.5, "low"); eq(c[0].close, 100.5, "close");
+  eq(c[0].clock, "10:00", "IST clock"); eq(c[1].clock, "10:05", "next bar");
+  eq(c[1].volume, 800, "bar volume = 2600 - 1800");
+});
+
 const failed = results.filter((r) => !r[1]);
 console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} FAILED: ${failed.map((f) => f[0]).join(" | ")}` : ""}`);
 process.exit(failed.length ? 1 : 0);
