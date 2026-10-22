@@ -38,6 +38,12 @@ function queued(fn) {
   return run;
 }
 
+// Count calls waiting for / running in the Angel queue (see the busy check in fetchCandles).
+async function counted(fn) {
+  g.__angelPending = (g.__angelPending || 0) + 1;
+  try { return await queued(fn); } finally { g.__angelPending = Math.max(0, (g.__angelPending || 1) - 1); }
+}
+
 const pad = (n) => String(n).padStart(2, "0");
 // Always build Angel date ranges in IST (Vercel runs in UTC).
 const IST_MS = 5.5 * 60 * 60 * 1000;
@@ -77,9 +83,12 @@ async function fetchCandles(token, tf) {
   const session = await getAngelSession();
   if (!session?.jwtToken) throw Object.assign(new Error("Angel One session failed. Check .env.local credentials."), { status: 401 });
 
+  // Many viewers/tabs asking for many different stocks would build an endless queue (each call waits 700 ms behind the last).
+  // Past 6 waiting calls, refuse to queue more: callers get cached/merged/tick-built candles instead and Angel is not flooded.
+  if ((g.__angelPending || 0) >= 6) throw Object.assign(new Error("Candle queue is busy (many requests at once); serving cached data"), { busy: true });
   let res;
   try {
-    res = await queued(() => callAngel(session, token, intervalStr));
+    res = await counted(() => callAngel(session, token, intervalStr));
   } catch (e) {
     const code = e.response?.status;
     if (code === 403 || code === 429) {
@@ -92,7 +101,7 @@ async function fetchCandles(token, tf) {
     }
     if (e.code === "ECONNABORTED") {
       await sleep(900); // one polite retry
-      res = await queued(() => callAngel(session, token, intervalStr));
+      res = await counted(() => callAngel(session, token, intervalStr));
     } else throw e;
   }
   g.__candleFails = 0;
