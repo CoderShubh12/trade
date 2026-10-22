@@ -5,7 +5,8 @@
 //  - all Angel calls go through one queue, spaced apart
 import { NextResponse } from "next/server";
 import axios from "axios";
-import { getTickCandles } from "@/lib/tickCandles";
+import { getTickCandles, getTickCandles15 } from "@/lib/tickCandles";
+import { getTicks } from "@/lib/liveFeed";
 import { getAngelSession, resetAngelSession } from "@/lib/angelAuth";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +129,16 @@ export async function GET(request) {
   const tf = searchParams.get("tf") || searchParams.get("interval") || "5";
   const key = `${token}_${tf}`;
   const cached = g.__candleCache.get(key);
+
+  // LIVE-ONLY mode (default, owner request 22 Oct): 5m/15m candles are built from live quotes, Angel's historical candle API is not called.
+  // Set CANDLES_SOURCE=angel in .env.local to go back to Angel candles (with the live bars as fallback). Costs: bars exist only
+  // from when sampling started (the server samples all session for the watchlist), so indicators need ~25 bars of warm-up.
+  if (process.env.CANDLES_SOURCE !== "angel" && (tf === "5" || tf === "15")) {
+    await getTicks([String(token)]).catch(() => {}); // makes sure this token is being sampled from now on
+    const tc = tf === "5" ? getTickCandles(token) : getTickCandles15(token);
+    if (!tc.length) return NextResponse.json({ success: false, error: "Live bars are starting for this stock (built from live quotes, no history).", data: [] }, { status: 503 });
+    return NextResponse.json({ success: true, data: tc, source: "LIVE_TICKS", tickBuilt: true, liveOnly: true });
+  }
 
   if (cached && Date.now() - cached.timestamp < FRESH_MS) {
     return NextResponse.json({ success: true, data: cached.data, cached: true });

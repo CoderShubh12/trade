@@ -326,6 +326,13 @@ await test("Users: up to 5 logins, owner keeps data/, others get their own folde
   eq((await readJournal("ravi")).length, 1, "ravi sees his call");
   eq((await readJournal("amit")).length, 0, "amit does not see ravi's call");
 });
+await test("Tick candles: 15-minute bars are built from three 5-minute bars", async () => {
+  const { recordTick, getTickCandles15 } = await import("../lib/tickCandles.js");
+  const t0 = Math.floor(ist(2026, 10, 22, 12, 0) / 900000) * 900000; // 12:00 bucket
+  for (let k = 0; k < 6; k++) recordTick("T3", 100 + k, 1000 * (k + 1), t0 + k * 300000 + 1000);
+  const c = getTickCandles15("T3");
+  eq(c.length, 2, "two 15m bars"); eq(c[0].clock, "12:00", "first bucket"); eq(c[0].open, 100, "open"); eq(c[0].close, 102, "close of 3rd 5m bar"); eq(c[0].high, 102, "high"); eq(c[1].clock, "12:15", "second bucket");
+});
 
 const failed = results.filter((r) => !r[1]);
 console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} FAILED: ${failed.map((f) => f[0]).join(" | ")}` : ""}`);
