@@ -27,11 +27,38 @@ function why(x) {
   return bits.join("; ");
 }
 
-function BotBox() {
+function Toasts({ items, onClose }) {
+  if (!items.length) return null;
+  return (
+    <div style={{ position: "fixed", top: 14, right: 14, zIndex: 9998, display: "flex", flexDirection: "column", gap: 8, width: "min(380px, 92vw)" }}>
+      {items.map((t) => (
+        <div key={t.id} style={{ animation: "bkBlink 1.2s infinite", border: `2px solid ${t.color || "#facc15"}`, borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", background: "#1a1606" }}>
+          <div style={{ fontWeight: 800, fontSize: 13 }}>{t.title}</div>
+          <div style={{ fontSize: 12, marginTop: 3 }}>{t.body}</div>
+          {t.foot && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>{t.foot}</div>}
+          <button onClick={() => onClose(t.id)} style={{ marginTop: 6, background: "#facc15", color: "#111", border: 0, borderRadius: 4, padding: "2px 10px", fontWeight: 700, cursor: "pointer", fontSize: 11 }}>Dismiss</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+function beep() { try { const A = window.AudioContext || window.webkitAudioContext, c = new A(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 880; g.gain.value = 0.08; o.start(); setTimeout(() => { o.stop(); c.close(); }, 250); } catch {} }
+const seenSet = () => { try { return new Set(JSON.parse(sessionStorage.getItem("bkSeen") || "[]")); } catch { return new Set(); } };
+const markSeen = (s) => { try { sessionStorage.setItem("bkSeen", JSON.stringify([...s].slice(-300))); } catch {} };
+
+function BotBox({ notify }) {
   const [b, setB] = useState(null);
   useEffect(() => {
     let live = true;
-    const load = async () => { try { const j = await (await fetch("/api/research-bot", { cache: "no-store" })).json(); if (live && j.success) setB(j); } catch {} };
+    const load = async () => {
+      try {
+        const j = await (await fetch("/api/research-bot", { cache: "no-store" })).json();
+        if (!live || !j.success) return;
+        setB(j);
+        const seen = seenSet(), fresh = j.trades.filter((x) => !seen.has("rb" + x.id));
+        if (fresh.length) { fresh.forEach((x) => seen.add("rb" + x.id)); markSeen(seen); notify && notify({ id: "rb" + fresh[0].id, color: "#38bdf8", title: `🤖 Research bot opened ${fresh.length} paper trade(s)`, body: fresh.slice(0, 3).map((x) => `${x.side} ${x.symbol} @ ${x.entry} (SL ${x.stopLoss}, T1 ${x.target1}, score ${x.score}): ${(x.why || []).slice(0, 3).join("; ")}`).join(" | "), foot: "Paper only. A screen candidate, not a proven edge." }); }
+      } catch {}
+    };
     load(); const id = setInterval(load, 30000);
     return () => { live = false; clearInterval(id); };
   }, []);
@@ -95,6 +122,8 @@ function ResearchBox() {
 }
 
 export default function BreakoutPanel({ onPick }) {
+  const [toasts, setToasts] = useState([]);
+  const notify = (x) => { setToasts((p) => (p.some((y) => y.id === x.id) ? p : [...p, x].slice(-3))); beep(); };
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const [at, setAt] = useState("");
@@ -120,12 +149,13 @@ export default function BreakoutPanel({ onPick }) {
   const rows = (dn ? d?.downTop20 : d?.top20) || [];
   return (
     <section style={{ margin: "12px 0", padding: "12px 16px", background: "#080d1a", border: "1px solid #1e293b", borderRadius: 8 }}>
+      <Toasts items={toasts} onClose={(id) => setToasts((p) => p.filter((y) => y.id !== id))} />
       <style>{`@keyframes bkBlink{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,.0);background:#1a1606}50%{box-shadow:0 0 14px 3px rgba(250,204,21,.7);background:#2b2308}}`}</style>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#38bdf8" }}>🔥 TOP 20 BREAKOUT STOCKS (CHARTINK-STYLE)</span>
         <span style={{ fontSize: 11, color: "#8b93a7" }}>live quotes, every 30 s{at ? `, last ${at}` : ""}</span>
       </div>
-      <BotBox />
+      <BotBox notify={notify} />
       <ResearchBox />
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {["UP", "DOWN"].map((k) => <button key={k} onClick={() => setSide(k)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", border: "1px solid #334155", background: side === k ? (k === "UP" ? "#14532d" : "#7f1d1d") : "transparent", color: "#e2e8f0", fontWeight: 700 }}>{k === "UP" ? "▲ BREAKOUT (BUY side)" : "▼ BREAKDOWN (SELL side)"}</button>)}

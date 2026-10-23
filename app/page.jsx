@@ -8,6 +8,7 @@ import MiniChart from "@/components/MiniChart";
 import PriceChart from "@/components/PriceChart";
 import BreakoutPanel from "@/components/BreakoutPanel";
 import NiftyReversalBot from "@/components/NiftyReversalBot";
+import MyCalls from "@/components/MyCalls";
 import { signalPoints } from "@/lib/signalPoints";
 import SessionStatus from "@/components/SessionStatus";
 import AiRecommendation from "@/components/AiRecommendation";
@@ -1951,6 +1952,7 @@ export default function DashboardPage() {
         onSelectStock={handleStockChange}
       />
 
+      <MyCalls />
       <NiftyReversalBot />
       <BreakoutPanel onPick={(x) => { handleStockChange({ symbol: x.symbol, token: x.token, exchangeSegment: 1 }); try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {} }} />
 
