@@ -231,6 +231,14 @@ export default function DashboardPage() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [breachInfo, setBreachInfo] = useState(null); // research-only ORB breach bot
   const [thinFeed, setThinFeed] = useState(0); // >0 = only that many tick-built bars exist (Angel candles refused); no signals until 25
+  // A stock opened from the breakout panel has no history in live-only mode: seed today's earlier bars once (owner only, one Angel call).
+  const backfillTried = useRef(new Set());
+  useEffect(() => {
+    const t = String(currentStock.token);
+    if (!thinFeed || backfillTried.current.has(t)) return;
+    backfillTried.current.add(t);
+    fetch(`/api/backfill?tokens=${t}`, { method: "POST" }).catch(() => {});
+  }, [thinFeed, currentStock.token]);
   useEffect(() => {
     let dead = false;
     const run = async () => {
