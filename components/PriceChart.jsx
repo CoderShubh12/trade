@@ -45,6 +45,7 @@ export default function PriceChart({
   height = 420,
   visibleBars = 90,
   levels = null, // { entry, stopLoss, target1, target2, side }
+  markers = null, // [{key:'YYYY-MM-DD HH:MM', side:'BUY'|'SELL', rule, why, price, afterPct}] rule-trigger points
   breach = null, // research: { level, side, label } breached ORB level line
 }) {
   const boxRef = useRef(null);
@@ -157,6 +158,12 @@ export default function PriceChart({
       };
     });
 
+    const mk = [];
+    if (markers && markers.length) {
+      const idx = new Map(bars.map((b, i) => [`${b.date} ${b.clock}`, i]));
+      for (const m of markers) { const i = idx.get(m.key); if (i == null) continue; const b = bars[i]; mk.push({ ...m, x: xOf(i), y: m.side === "BUY" ? yOf(b.low) + 12 : yOf(b.high) - 12 }); }
+    }
+
     let cpr = null;
     if (ind?.cpr) {
       const yTC = yOf(ind.cpr.tc);
@@ -189,13 +196,14 @@ export default function PriceChart({
       volH,
       candleW,
       cpr,
+      mk,
       orb,
       e9D: buildPath(e9, xOf, yOf),
       e21D: buildPath(e21, xOf, yOf),
       vwD: buildPath(vw, xOf, yOf),
       volSmaD: buildPath(volSma, xOf, (v) => volTop + volH - (v / maxVol) * (volH - 4)),
     };
-  }, [data, ind, width, height, visibleBars, levels]);
+  }, [data, ind, width, height, visibleBars, levels, markers]);
 
   if (!chart) {
     return (
@@ -453,6 +461,19 @@ export default function PriceChart({
             />
           </g>
         ))}
+
+        {/* rule-trigger points (buy / sell) */}
+        {chart.mk.map((m, i) => {
+          const col = m.side === "BUY" ? "#2FD98A" : "#FF5D5D";
+          const tri = m.side === "BUY" ? `${m.x},${m.y - 7} ${m.x - 6},${m.y + 5} ${m.x + 6},${m.y + 5}` : `${m.x},${m.y + 7} ${m.x - 6},${m.y - 5} ${m.x + 6},${m.y - 5}`;
+          return (
+            <g key={`mk${i}`}>
+              <title>{`${m.side} trigger (${m.rule}) @ ${m.price}: ${m.why}${m.afterPct == null ? "" : `. Next 5 bars: ${m.afterPct > 0 ? "+" : ""}${m.afterPct}% in this direction`}`}</title>
+              <polygon points={tri} fill={col} stroke="#0b1220" strokeWidth="1" />
+              <text x={m.x} y={m.side === "BUY" ? m.y + 17 : m.y - 9} fontSize="8" fill={col} textAnchor="middle" fontWeight="700">{m.rule}</text>
+            </g>
+          );
+        })}
 
         {/* trade levels */}
         {levelLines.map((l, i) => {

@@ -7,6 +7,7 @@ import Gauge from "@/components/Gauge";
 import MiniChart from "@/components/MiniChart";
 import PriceChart from "@/components/PriceChart";
 import BreakoutPanel from "@/components/BreakoutPanel";
+import { signalPoints } from "@/lib/signalPoints";
 import SessionStatus from "@/components/SessionStatus";
 import AiRecommendation from "@/components/AiRecommendation";
 import SignalAlertModal from "@/components/SignalAlertModal";
@@ -633,6 +634,7 @@ export default function DashboardPage() {
     const shown = Math.min(Math.max(replayCount, 1), replaySession.length);
     return rawData.slice(0, replaySession.startIdx + shown);
   }, [mode, rawData, replaySession, replayCount, liveTick, currentStock.token, selectedTF]);
+  const sigPts = useMemo(() => (data && data.length ? signalPoints(data) : []), [data]);
 
   // Virtual clock for REPLAY = the moment the newest revealed candle closed.
   const virtualNowMs =
@@ -1452,6 +1454,7 @@ export default function DashboardPage() {
         visibleBars={bigChart ? 150 : 90}
         levels={chartLevels}
         breach={breachLine}
+        markers={sigPts}
       />
       {breachInfo?.state && (
         <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
