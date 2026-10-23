@@ -1,0 +1,206 @@
+{
+ "status": "CANDIDATES ONLY - NOT VALIDATED. None passed the rule (test PF>=1.3, n>=100, train>0, both test halves>0). All were negative on the train half, so they look regime-dependent. Do NOT use live; forward paper-test first.",
+ "source": "analysis/rule_mining.mjs (44 stocks x 63 days, 5m, 0.06% cost, ATR SL/TP)",
+ "candidates": [
+  {
+   "rule": "sp_M",
+   "mode": "FOLLOW",
+   "slATR": 1.5,
+   "tpATR": 3,
+   "train": {
+    "n": 580,
+    "win": 40,
+    "pf": 0.8,
+    "net": -21.57
+   },
+   "test": {
+    "n": 254,
+    "win": 47.6,
+    "pf": 1.35,
+    "net": 15.75
+   },
+   "testHalfA_net%": 6.38,
+   "testHalfB_net%": 9.37
+  },
+  {
+   "rule": "sp_LOD",
+   "mode": "FOLLOW",
+   "slATR": 1.5,
+   "tpATR": 2,
+   "train": {
+    "n": 368,
+    "win": 40.8,
+    "pf": 0.66,
+    "net": -24.93
+   },
+   "test": {
+    "n": 174,
+    "win": 56.9,
+    "pf": 1.31,
+    "net": 8.47
+   },
+   "testHalfA_net%": 2.43,
+   "testHalfB_net%": 6.04
+  },
+  {
+   "rule": "sp_LOD",
+   "mode": "FOLLOW",
+   "slATR": 1.5,
+   "tpATR": 3,
+   "train": {
+    "n": 368,
+    "win": 33.7,
+    "pf": 0.67,
+    "net": -27.02
+   },
+   "test": {
+    "n": 174,
+    "win": 47.1,
+    "pf": 1.29,
+    "net": 9.46
+   },
+   "testHalfA_net%": 4.34,
+   "testHalfB_net%": 5.12
+  },
+  {
+   "rule": "sp_W?",
+   "mode": "FADE",
+   "slATR": 1.5,
+   "tpATR": 3,
+   "train": {
+    "n": 1884,
+    "win": 38.5,
+    "pf": 0.81,
+    "net": -79.26
+   },
+   "test": {
+    "n": 817,
+    "win": 44.1,
+    "pf": 1.19,
+    "net": 33.68
+   },
+   "testHalfA_net%": 7.85,
+   "testHalfB_net%": 25.83
+  },
+  {
+   "rule": "sp_M",
+   "mode": "FOLLOW",
+   "slATR": 1,
+   "tpATR": 3,
+   "train": {
+    "n": 580,
+    "win": 29.8,
+    "pf": 0.7,
+    "net": -29.18
+   },
+   "test": {
+    "n": 254,
+    "win": 37.4,
+    "pf": 1.19,
+    "net": 7.85
+   },
+   "testHalfA_net%": 1.94,
+   "testHalfB_net%": 5.91
+  },
+  {
+   "rule": "sp_M",
+   "mode": "FOLLOW",
+   "slATR": 0.75,
+   "tpATR": 3,
+   "train": {
+    "n": 580,
+    "win": 24.1,
+    "pf": 0.66,
+    "net": -29.77
+   },
+   "test": {
+    "n": 254,
+    "win": 31.1,
+    "pf": 1.12,
+    "net": 4.38
+   },
+   "testHalfA_net%": -0.36,
+   "testHalfB_net%": 4.75
+  },
+  {
+   "rule": "sp_W?",
+   "mode": "FADE",
+   "slATR": 1,
+   "tpATR": 3,
+   "train": {
+    "n": 1884,
+    "win": 29.6,
+    "pf": 0.76,
+    "net": -89.34
+   },
+   "test": {
+    "n": 817,
+    "win": 34.4,
+    "pf": 1.11,
+    "net": 16.96
+   },
+   "testHalfA_net%": 0.92,
+   "testHalfB_net%": 16.03
+  },
+  {
+   "rule": "sp_LOD",
+   "mode": "FOLLOW",
+   "slATR": 1.5,
+   "tpATR": 1.5,
+   "train": {
+    "n": 368,
+    "win": 47.3,
+    "pf": 0.62,
+    "net": -24.67
+   },
+   "test": {
+    "n": 174,
+    "win": 60.3,
+    "pf": 1.11,
+    "net": 2.89
+   },
+   "testHalfA_net%": 0.09,
+   "testHalfB_net%": 2.81
+  },
+  {
+   "rule": "sp_M?",
+   "mode": "FOLLOW",
+   "slATR": 1,
+   "tpATR": 3,
+   "train": {
+    "n": 1826,
+    "win": 30,
+    "pf": 0.77,
+    "net": -81.36
+   },
+   "test": {
+    "n": 795,
+    "win": 35,
+    "pf": 1.1,
+    "net": 15.99
+   },
+   "testHalfA_net%": 3.59,
+   "testHalfB_net%": 12.4
+  },
+  {
+   "rule": "sp_M",
+   "mode": "FOLLOW",
+   "slATR": 1.5,
+   "tpATR": 2,
+   "train": {
+    "n": 580,
+    "win": 47.8,
+    "pf": 0.84,
+    "net": -15.62
+   },
+   "test": {
+    "n": 254,
+    "win": 52.8,
+    "pf": 1.1,
+    "net": 3.98
+   },
+   "testHalfA_net%": 2.92,
+   "testHalfB_net%": 1.06
+  }
+ ]
+}
