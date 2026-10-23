@@ -16,10 +16,10 @@ async function run(interval, range) {
   const dir5 = path.join(process.cwd(), "data", "movers", "5m"), out = path.join(process.cwd(), "data", "movers", interval.replace("m", "m"));
   fs.mkdirSync(out, { recursive: true });
   const syms = fs.readdirSync(dir5).filter((f) => f.endsWith("_5m.json")).map((f) => f.replace("_5m.json", ""));
-  const idx = ["NIFTY", "BANKNIFTY"]; H.total = syms.length + 2;
+  const idx = []; H.total = syms.length;
   for (const s of [...syms, ...idx]) {
     try {
-      const y = s === "NIFTY" ? "^NSEI" : s === "BANKNIFTY" ? "^NSEBANK" : encodeURIComponent(s) + ".NS";
+      const y = s === "NIFTY_50" ? "^NSEI" : s === "BANK_NIFTY" ? "^NSEBANK" : s === "M_M" ? "M%26M.NS" : encodeURIComponent(s) + ".NS";
       const r = (await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${y}`, { params: { interval, range }, timeout: 15000, headers: { "User-Agent": "Mozilla/5.0" } })).data?.chart?.result?.[0];
       const q = r.indicators.quote[0], candles = [];
       r.timestamp.forEach((ts, i) => { if (q.close[i] == null || q.open[i] == null) return; const iso = new Date(ts * 1000 + IST).toISOString(); candles.push({ date: iso.slice(0, 10), clock: iso.slice(11, 16), open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume[i] || 0 }); });
