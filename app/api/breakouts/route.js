@@ -58,7 +58,7 @@ export async function GET() {
     const downTop20 = dscored.filter((x) => x.hits > 0).sort((a, b) => b.hits - a.hits || a.chgPct - b.chgPct).slice(0, 20);
     const downPicks = dscored.filter((x) => x.hits >= 5).sort((a, b) => b.hits - a.hits || a.chgPct - b.chgPct);
     const nearest = [...out].sort((a, b) => a.offDayHighPct - b.offDayHighPct).slice(0, 5); // closest to the day high, for context when picks is empty
-    return NextResponse.json({ success: true, scanned: out.length, conditions: CONDS.map(([n]) => n), indices, top20, picks, downTop20, downPicks, nearest, note: "Quote-based screen only. A pick is a candidate for the engine to evaluate, not a call." });
+    return NextResponse.json({ success: true, scanned: out.length, conditions: CONDS.map(([n]) => n), indices, quotes: Object.fromEntries(out.map((x) => [x.token, { ltp: x.ltp, symbol: x.symbol }])), top20, picks, downTop20, downPicks, nearest, note: "Quote-based screen only. A pick is a candidate for the engine to evaluate, not a call." });
   } catch (e) {
     return NextResponse.json({ success: false, error: e.response?.data?.message || e.message }, { status: 500 });
   }

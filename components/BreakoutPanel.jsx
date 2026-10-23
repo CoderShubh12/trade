@@ -27,6 +27,34 @@ function why(x) {
   return bits.join("; ");
 }
 
+function BotBox() {
+  const [b, setB] = useState(null);
+  useEffect(() => {
+    let live = true;
+    const load = async () => { try { const j = await (await fetch("/api/research-bot", { cache: "no-store" })).json(); if (live && j.success) setB(j); } catch {} };
+    load(); const id = setInterval(load, 30000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
+  if (!b) return null;
+  const td2 = { padding: "3px 6px", fontSize: 11, borderBottom: "1px solid #131a2b" };
+  return (
+    <div style={{ border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", marginBottom: 10 }}>
+      <div style={{ fontSize: 12 }}><b style={{ color: "#38bdf8" }}>🤖 15-MIN RESEARCH BOT (paper only)</b> · today {b.total} trades ({b.open} open, {b.closed} closed, {b.wins} wins) · net {b.netR}R ≈ ₹{b.netRs} after est. costs{b.lastError ? <span style={{ color: "#ff8a80" }}> · error: {b.lastError}</span> : null}</div>
+      <div style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0 4px" }}>Every 15 min (09:30-14:45) it opens up to 3 top candidates, exits at SL / T1 / 15:15 on 60-s quotes. A data collector, not a proven strategy.</div>
+      {b.trades.length > 0 && (
+        <div style={{ maxHeight: 180, overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["Time", "Stock", "Side", "Entry", "SL", "T1", "Status", "Exit", "Net R"].map((h) => <th key={h} style={{ ...th, fontSize: 10 }}>{h}</th>)}</tr></thead>
+            <tbody>{b.trades.map((t) => (
+              <tr key={t.id}><td style={td2}>{t.entryClock}</td><td style={{ ...td2, fontWeight: 700 }}>{t.symbol}</td><td style={{ ...td2, color: t.side === "BUY" ? "#4cd08a" : "#ff8a80" }}>{t.side}</td><td style={td2}>{t.entry}</td><td style={td2}>{t.stopLoss}</td><td style={td2}>{t.target1}</td><td style={td2}>{t.status === "OPEN" ? "OPEN" : t.reason}</td><td style={td2}>{t.exit ?? "-"}</td><td style={{ ...td2, color: t.r > 0 ? "#4cd08a" : t.r < 0 ? "#ff8a80" : "#e2e8f0" }}>{t.r ?? "-"}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ResearchBox() {
   const [cap, setCap] = useState(100000), [risk, setRisk] = useState(0.5), [r, setR] = useState(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const run = async () => {
@@ -97,6 +125,7 @@ export default function BreakoutPanel({ onPick }) {
         <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#38bdf8" }}>🔥 TOP 20 BREAKOUT STOCKS (CHARTINK-STYLE)</span>
         <span style={{ fontSize: 11, color: "#8b93a7" }}>live quotes, every 30 s{at ? `, last ${at}` : ""}</span>
       </div>
+      <BotBox />
       <ResearchBox />
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {["UP", "DOWN"].map((k) => <button key={k} onClick={() => setSide(k)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", border: "1px solid #334155", background: side === k ? (k === "UP" ? "#14532d" : "#7f1d1d") : "transparent", color: "#e2e8f0", fontWeight: 700 }}>{k === "UP" ? "▲ BREAKOUT (BUY side)" : "▼ BREAKDOWN (SELL side)"}</button>)}
