@@ -133,7 +133,7 @@ export async function GET(request) {
   // LIVE-ONLY mode (default, owner request 22 Oct): 5m/15m candles are built from live quotes, Angel's historical candle API is not called.
   // Set CANDLES_SOURCE=angel in .env.local to go back to Angel candles (with the live bars as fallback). Costs: bars exist only
   // from when sampling started (the server samples all session for the watchlist), so indicators need ~25 bars of warm-up.
-  if (process.env.CANDLES_SOURCE !== "angel" && (tf === "5" || tf === "15")) {
+  if (process.env.CANDLES_SOURCE !== "angel" && searchParams.get("source") !== "angel" && (tf === "5" || tf === "15")) {
     await getTicks([String(token)]).catch(() => {}); // makes sure this token is being sampled from now on
     const tc = tf === "5" ? getTickCandles(token) : getTickCandles15(token);
     if (!tc.length) return NextResponse.json({ success: false, error: "Live bars are starting for this stock (built from live quotes, no history).", data: [] }, { status: 503 });
