@@ -3,6 +3,7 @@
 //  - one shared request per token+timeframe at a time (single-flight)
 //  - short cache, and if Angel fails the last good candles are served (flagged stale)
 //  - all Angel calls go through one queue, spaced apart
+import { getYahooCandles } from "@/lib/yahooCandles";
 import { NextResponse } from "next/server";
 import axios from "axios";
 import { getTickCandles, getTickCandles15 } from "@/lib/tickCandles";
@@ -135,6 +136,12 @@ export async function GET(request) {
   // from when sampling started (the server samples all session for the watchlist), so indicators need ~25 bars of warm-up.
   if (process.env.CANDLES_SOURCE !== "angel" && searchParams.get("source") !== "angel" && (tf === "5" || tf === "15")) {
     await getTicks([String(token)]).catch(() => {}); // makes sure this token is being sampled from now on
+    if (process.env.CANDLES_SOURCE !== "live") { // chart history from Yahoo (unofficial) while Angel candles are throttled; falls back to live ticks
+      try {
+        const yb = await getYahooCandles(token, tf);
+        return NextResponse.json({ success: true, data: yb, source: "YAHOO", tickBuilt: false, liveOnly: false });
+      } catch (e) { console.warn("[candles] Yahoo failed, using live ticks:", e.message); }
+    }
     const tc = tf === "5" ? getTickCandles(token) : getTickCandles15(token);
     if (!tc.length) return NextResponse.json({ success: false, error: "Live bars are starting for this stock (built from live quotes, no history).", data: [] }, { status: 503 });
     return NextResponse.json({ success: true, data: tc, source: "LIVE_TICKS", tickBuilt: true, liveOnly: true });
