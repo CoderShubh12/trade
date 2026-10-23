@@ -6,6 +6,7 @@ import Link from "next/link";
 import Gauge from "@/components/Gauge";
 import MiniChart from "@/components/MiniChart";
 import PriceChart from "@/components/PriceChart";
+import BreakoutPanel from "@/components/BreakoutPanel";
 import SessionStatus from "@/components/SessionStatus";
 import AiRecommendation from "@/components/AiRecommendation";
 import SignalAlertModal from "@/components/SignalAlertModal";
@@ -1930,6 +1931,8 @@ export default function DashboardPage() {
         activeSymbol={currentStock.symbol}
         onSelectStock={handleStockChange}
       />
+
+      <BreakoutPanel onPick={(x) => { handleStockChange({ symbol: x.symbol, token: x.token, exchangeSegment: 1 }); try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {} }} />
 
       {/* Chartink Screener */}
       <section
