@@ -27,7 +27,7 @@ export async function GET() {
       const offDayHigh = hi > 0 ? ((hi - ltp) / hi) * 100 : null; // 0 = trading at the day high
       const to52 = w52 > 0 ? ((w52 - ltp) / w52) * 100 : null;
       const range = hi > lo ? (ltp - lo) / (hi - lo) : null; // 1 = at day high
-      return { symbol: sym.get(String(r.symbolToken)) || r.tradingSymbol, token: String(r.symbolToken), ltp, chgPct: chg, offDayHighPct: offDayHigh, to52wHighPct: to52, rangePos: range, vol: Number(r.tradeVolume) || 0, open: Number(r.open), prevClose: pc };
+      return { symbol: sym.get(String(r.symbolToken)) || r.tradingSymbol, token: String(r.symbolToken), ltp, chgPct: chg, offDayHighPct: offDayHigh, to52wHighPct: to52, rangePos: range, low: lo, vol: Number(r.tradeVolume) || 0, open: Number(r.open), prevClose: pc };
     }).filter((x) => x.ltp > 0 && x.chgPct != null && x.offDayHighPct != null);
     // Chartink-style counter: each classic breakout condition met = 1 hit. Rank by hits, then by % change.
     const CONDS = [
@@ -41,8 +41,21 @@ export async function GET() {
     const scored = out.map((x) => { const met = CONDS.filter(([, f]) => f(x)).map(([n]) => n); return { ...x, hits: met.length, met }; });
     const top20 = scored.filter((x) => x.hits > 0).sort((a, b) => b.hits - a.hits || b.chgPct - a.chgPct).slice(0, 20);
     const picks = scored.filter((x) => x.hits >= 5).sort((a, b) => b.hits - a.hits || b.chgPct - a.chgPct);
+    // SELL side (mirror): breakdown conditions
+    const lowOff = (x) => (x.ltp > 0 && x.low > 0 ? ((x.ltp - x.low) / x.ltp) * 100 : null);
+    const DCONDS = [
+      ["Down >0.5% on day", (x) => x.chgPct < -0.5],
+      ["Within 0.25% of day low", (x) => x.offDayLowPct != null && x.offDayLowPct <= 0.25],
+      ["Lower 20% of day range", (x) => x.rangePos != null && x.rangePos <= 0.2],
+      ["Below today's open", (x) => x.open > 0 && x.ltp < x.open],
+      ["Gap-down open", (x) => x.prevClose > 0 && x.open < x.prevClose * 0.998],
+      ["Weak vs prev close (<-1%)", (x) => x.chgPct < -1],
+    ];
+    const dscored = out.map((x) => { const y = { ...x, offDayLowPct: lowOff(x) }; const met = DCONDS.filter(([, f]) => f(y)).map(([n]) => n); return { ...y, hits: met.length, met }; });
+    const downTop20 = dscored.filter((x) => x.hits > 0).sort((a, b) => b.hits - a.hits || a.chgPct - b.chgPct).slice(0, 20);
+    const downPicks = dscored.filter((x) => x.hits >= 5).sort((a, b) => b.hits - a.hits || a.chgPct - b.chgPct);
     const nearest = [...out].sort((a, b) => a.offDayHighPct - b.offDayHighPct).slice(0, 5); // closest to the day high, for context when picks is empty
-    return NextResponse.json({ success: true, scanned: out.length, conditions: CONDS.map(([n]) => n), top20, picks, nearest, note: "Quote-based screen only. A pick is a candidate for the engine to evaluate, not a call." });
+    return NextResponse.json({ success: true, scanned: out.length, conditions: CONDS.map(([n]) => n), top20, picks, downTop20, downPicks, nearest, note: "Quote-based screen only. A pick is a candidate for the engine to evaluate, not a call." });
   } catch (e) {
     return NextResponse.json({ success: false, error: e.response?.data?.message || e.message }, { status: 500 });
   }
