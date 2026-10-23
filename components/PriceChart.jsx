@@ -464,7 +464,7 @@ export default function PriceChart({
 
         {/* rule-trigger points (buy / sell) */}
         {chart.mk.map((m, i) => {
-          const col = m.side === "BUY" ? "#2FD98A" : "#FF5D5D";
+          const col = String(m.rule).endsWith("?") ? "#f59e0b" : m.side === "BUY" ? "#2FD98A" : "#FF5D5D";
           const tri = m.side === "BUY" ? `${m.x},${m.y - 7} ${m.x - 6},${m.y + 5} ${m.x + 6},${m.y + 5}` : `${m.x},${m.y + 7} ${m.x - 6},${m.y - 5} ${m.x + 6},${m.y - 5}`;
           return (
             <g key={`mk${i}`}>
