@@ -27,6 +27,45 @@ function why(x) {
   return bits.join("; ");
 }
 
+function ResearchBox() {
+  const [cap, setCap] = useState(100000), [risk, setRisk] = useState(0.5), [r, setR] = useState(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const run = async () => {
+    setBusy(true); setErr("");
+    try { const j = await (await fetch(`/api/research?capital=${cap}&riskPct=${risk}`, { cache: "no-store" })).json(); if (!j.success) throw new Error(j.error || "failed"); setR(j); } catch (e) { setErr(String(e.message || e)); }
+    setBusy(false);
+  };
+  const inp = { width: 90, background: "#0d1424", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 4, padding: "2px 6px", fontSize: 12 };
+  return (
+    <div style={{ border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", marginBottom: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <b style={{ color: "#a78bfa" }}>📋 SESSION RESEARCH REPORT</b>
+        <label>Capital ₹ <input style={inp} type="number" value={cap} onChange={(e) => setCap(e.target.value)} /></label>
+        <label>Risk/trade % <input style={{ ...inp, width: 60 }} type="number" step="0.1" value={risk} onChange={(e) => setRisk(e.target.value)} /></label>
+        <button onClick={run} disabled={busy} style={{ background: "#7c3aed", color: "#fff", border: 0, borderRadius: 4, padding: "3px 10px", fontWeight: 700, cursor: "pointer" }}>{busy ? "Running…" : "Generate"}</button>
+      </div>
+      {err && <div style={{ color: "#ff8a80", fontSize: 12, marginTop: 6 }}>Error: {err}</div>}
+      {r && (
+        <div style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+          <div><b>Data:</b> {r.dataQuality} · {new Date(r.dataAt).toLocaleTimeString("en-IN")}</div>
+          <div><b>Market:</b> {r.market.trend}{r.market.nifty ? ` · Nifty ${r.market.nifty.ltp} (${r.market.nifty.chgPct}%)` : ""}{r.market.bankNifty ? ` · Bank Nifty ${r.market.bankNifty.ltp} (${r.market.bankNifty.chgPct}%)` : ""}</div>
+          <div style={{ color: "#94a3b8" }}><b>Unavailable (not invented):</b> {r.unavailable.join(", ")}</div>
+          <div style={{ fontWeight: 800, color: r.ranked.length ? "#4cd08a" : "#facc15", margin: "4px 0" }}>{r.verdict}</div>
+          {r.ranked.map((c, i) => (
+            <div key={c.token} style={{ borderTop: "1px solid #1e293b", padding: "6px 0" }}>
+              <b>#{i + 1} {c.symbol} {c.side === "BUY" ? "▲ BUY" : "▼ SELL"}</b> · ₹{c.ltp} ({c.chgPct}%) · score {c.score}/100 · {c.hits} hits<br />
+              Trigger: {c.entryTrigger}<br />
+              SL {c.stopLoss} · T1 {c.target1} · T2 {c.target2} · qty {c.qty} · risk ₹{c.riskAmount} · costs ≈ ₹{c.costRs} · net R at T1 {c.netR_T1}, T2 {c.netR_T2}<br />
+              Why: {c.met.join("; ")} · traded ≈ ₹{c.tradedValueCr} cr<br />
+              Invalid if: {c.invalidation}
+            </div>
+          ))}
+          <div style={{ color: "#94a3b8", marginTop: 4 }}>{r.caveats}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BreakoutPanel({ onPick }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
@@ -58,6 +97,7 @@ export default function BreakoutPanel({ onPick }) {
         <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#38bdf8" }}>🔥 TOP 20 BREAKOUT STOCKS (CHARTINK-STYLE)</span>
         <span style={{ fontSize: 11, color: "#8b93a7" }}>live quotes, every 30 s{at ? `, last ${at}` : ""}</span>
       </div>
+      <ResearchBox />
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {["UP", "DOWN"].map((k) => <button key={k} onClick={() => setSide(k)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", border: "1px solid #334155", background: side === k ? (k === "UP" ? "#14532d" : "#7f1d1d") : "transparent", color: "#e2e8f0", fontWeight: 700 }}>{k === "UP" ? "▲ BREAKOUT (BUY side)" : "▼ BREAKDOWN (SELL side)"}</button>)}
       </div>

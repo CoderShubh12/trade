@@ -232,14 +232,14 @@ export default function DashboardPage() {
   const [breachInfo, setBreachInfo] = useState(null); // research-only ORB breach bot
   const [thinFeed, setThinFeed] = useState(0); // >0 = only that many tick-built bars exist (Angel candles refused); no signals until 25
   // A stock opened from the breakout panel has no history in live-only mode: seed today's earlier bars once (owner only, one Angel call).
-  const backfillTried = useRef(new Map()); // token -> last try ms; retried every 3 min while the feed is thin (Angel cool-downs)
+  const backfillAt = useRef({}); // token -> last try ms; retried every 3 min while the feed is thin (Angel cool-downs)
   useEffect(() => {
     if (!thinFeed) return;
     const t = String(currentStock.token);
     const go = () => {
-      const last = backfillTried.current.get(t) || 0;
+      const last = backfillAt.current[t] || 0;
       if (Date.now() - last < 170000) return;
-      backfillTried.current.set(t, Date.now());
+      backfillAt.current[t] = Date.now();
       fetch(`/api/backfill?tokens=${t}`, { method: "POST" }).catch(() => {});
     };
     go();
