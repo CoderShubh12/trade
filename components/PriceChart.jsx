@@ -45,6 +45,7 @@ export default function PriceChart({
   height = 420,
   visibleBars = 90,
   levels = null, // { entry, stopLoss, target1, target2, side }
+  breach = null, // research: { level, side, label } breached ORB level line
 }) {
   const boxRef = useRef(null);
   const [width, setWidth] = useState(900);
@@ -226,14 +227,14 @@ export default function PriceChart({
     setHoverIdx(i >= 0 && i < chart.bars.length ? i : null);
   };
 
-  const levelLines = levels
+  const levelLines = (levels
     ? [
         { v: levels.entry, c: "#e2e8f0", t: `ENTRY ${levels.side || ""}` },
         { v: levels.stopLoss, c: "#FF5D5D", t: "STOP" },
         { v: levels.target1, c: "#2FD98A", t: "T1" },
         { v: levels.target2, c: "#22c55e", t: "T2" },
       ].filter((l) => l.v > 0)
-    : [];
+    : []).concat(breach && breach.level > 0 ? [{ v: breach.level, c: "#f59e0b", t: breach.label || "BREACH" }] : []);
 
   return (
     <div

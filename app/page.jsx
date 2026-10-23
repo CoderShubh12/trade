@@ -228,6 +228,7 @@ export default function DashboardPage() {
   //           the replay cursor in REPLAY mode.
   const [rawData, setRawData] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [breachInfo, setBreachInfo] = useState(null); // research-only ORB breach bot
   const [thinFeed, setThinFeed] = useState(0); // >0 = only that many tick-built bars exist (Angel candles refused); no signals until 25
 
   // LIVE = real feed. REPLAY = a past real session played candle by candle
@@ -1228,6 +1229,23 @@ export default function DashboardPage() {
       ? Math.max(500, Math.min(680, vp.h - 200))
       : Math.max(380, Math.min(520, Math.round(vp.h * 0.55)));
 
+  useEffect(() => {
+    let dead = false;
+    const run = async () => {
+      try {
+        const r = await fetch(`/api/breach?token=${currentStock.token}`, { cache: "no-store" });
+        const j = await r.json();
+        if (!dead) setBreachInfo(j);
+      } catch {}
+    };
+    run();
+    const id = setInterval(run, 20000);
+    return () => { dead = true; clearInterval(id); };
+  }, [currentStock.token]);
+  const breachLine = breachInfo?.state?.level
+    ? { level: breachInfo.state.level, label: `ORB ${breachInfo.state.firstBreach}` }
+    : null;
+
   const chartLevels = activeTradeInstance
     ? {
         entry: activeTradeInstance.entry,
@@ -1417,7 +1435,14 @@ export default function DashboardPage() {
         height={chartHeight}
         visibleBars={bigChart ? 150 : 90}
         levels={chartLevels}
+        breach={breachLine}
       />
+      {breachInfo?.state && (
+        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+          Breach bot (research): ORB {breachInfo.state.firstBreach || "no breach"}, now {breachInfo.state.now}
+          {breachInfo.breadth ? `, breadth ${breachInfo.breadth.up}/${breachInfo.breadth.n} above VWAP` : ""}. {breachInfo.verdict}
+        </div>
+      )}
     </section>
   );
 
