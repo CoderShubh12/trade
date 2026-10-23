@@ -466,7 +466,7 @@ export default function DashboardPage() {
           json.data.length > 0
         ) {
           setRawData(json.data);
-          setThinFeed(json.tickBuilt && json.data.length < 25 ? json.data.length : 0);
+          setThinFeed(json.tickBuilt && json.data.length < 12 ? json.data.length : 0);
           setErrorMsg(null);
         } else if (isMounted && !json.success) {
           setErrorMsg(json.error || "Awaiting Live Exchange Feed...");
@@ -710,7 +710,7 @@ export default function DashboardPage() {
     }
     const g = getLiveSignalGate(rawData, tfNum);
     const w = getTradeWindowStatus();
-    if (thinFeed > 0) return { allowed: false, inWindow: w.allowed, windowReason: w.reason, reason: `Only ${thinFeed} tick-built bars so far (need 25) - signals paused` };
+    if (thinFeed > 0) return { allowed: false, inWindow: w.allowed, windowReason: w.reason, reason: `Only ${thinFeed} tick-built bars so far (need 12) - signals paused` };
     return { ...g, inWindow: w.allowed, windowReason: w.reason };
   }, [mode, rawData, tfNum, virtualNowMs, thinFeed]);
 
