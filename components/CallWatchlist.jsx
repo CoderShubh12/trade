@@ -127,6 +127,8 @@ export default function CallWatchlist({
       const updated = prev.map((item) => {
         if (item.status !== "RUNNING") return item;
         if (item.symbol !== currentStock?.symbol) return item;
+        // ignore a stale price from the previously selected stock (far from this call's entry)
+        if (item.entryPrice > 0 && Math.abs(currentPrice / item.entryPrice - 1) > 0.15) return item;
 
         const isBuy = item.side === "BUY";
         const hitTarget = isBuy

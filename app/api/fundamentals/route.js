@@ -21,6 +21,9 @@ const CACHE_MS = 6 * 60 * 60 * 1000; // fundamentals change slowly
 const resultCache = new Map(); // symbol -> { at, data }
 let session = null; // { cookie, crumb, at }
 
+// NSE tickers that were renamed: Yahoo only knows the new ticker (ZOMATO -> ETERNAL since Mar 2025).
+const YAHOO_ALIAS = { ZOMATO: "ETERNAL", MCDOWELL: "UNITDSPR" };
+
 async function getSession(force = false) {
   if (!force && session && Date.now() - session.at < 50 * 60 * 1000) {
     return session;
@@ -187,7 +190,7 @@ export async function GET(request) {
   }
 
   try {
-    const r = await fetchSummary(`${symbol}.NS`);
+    const r = await fetchSummary(`${YAHOO_ALIAS[symbol] || symbol}.NS`);
     if (!r) {
       return NextResponse.json({
         success: false,

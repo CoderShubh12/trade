@@ -2265,6 +2265,7 @@ export default function DashboardPage() {
       <AccuracyTracker
         activeAlert={mode === "REPLAY" ? null : activeAlert}
         currentPrice={ind?.latest?.price}
+        currentSymbol={currentStock?.symbol}
       />
 
       {AiRecommendation ? (

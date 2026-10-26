@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 
-export default function AccuracyTracker({ activeAlert, currentPrice }) {
+export default function AccuracyTracker({ activeAlert, currentPrice, currentSymbol }) {
   const [history, setHistory] = useState([]);
 
   // Load initial logs from localStorage
@@ -68,6 +68,10 @@ export default function AccuracyTracker({ activeAlert, currentPrice }) {
       let changed = false;
       const updated = prev.map((call) => {
         if (call.status !== "RUNNING") return call;
+        // BUG FIX: the live price belongs to the stock on screen only. Never judge another stock's call with it,
+        // and ignore a price that is far from the call's entry (stale price from a stock just switched away from).
+        if (!currentSymbol || call.symbol !== currentSymbol) return call;
+        if (call.entryPrice > 0 && Math.abs(currentPrice / call.entryPrice - 1) > 0.15) return call;
 
         const isBuy = call.side === "BUY";
         const hitTarget = isBuy
@@ -96,7 +100,7 @@ export default function AccuracyTracker({ activeAlert, currentPrice }) {
       }
       return updated;
     });
-  }, [currentPrice]);
+  }, [currentPrice, currentSymbol]);
 
   const clearHistory = () => {
     setHistory([]);
