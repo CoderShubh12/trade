@@ -66,7 +66,7 @@ export default function NiftyReversalBot() {
       )}
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#a78bfa" }}>🔄 NIFTY REVERSAL BOT (chart + news)</span>
-        <span style={{ fontSize: 11, color: "#8b93a7" }}>{d ? `data ${new Date(d.dataAt).toLocaleTimeString("en-IN")} · refresh 30 s` : ""}</span>
+        <span style={{ fontSize: 11, color: "#8b93a7" }}>{d ? `data ${new Date(d.dataAt).toLocaleTimeString("en-IN")} · ${d.source || ""} · last candle ${d.lastBar || "-"} · refresh 30 s` : ""}</span>
       </div>
       {err && <div style={{ color: "#ff8a80", fontSize: 12 }}>Error: {err}</div>}
       {d && <Trace bars={d.bars} events={d.events} />}

@@ -11,6 +11,7 @@ import NiftyReversalBot from "@/components/NiftyReversalBot";
 import MyCalls from "@/components/MyCalls";
 import PatternAlerts from "@/components/PatternAlerts";
 import DailyScan from "@/components/DailyScan";
+import StockPicker from "@/components/StockPicker";
 import ConfluenceStrip from "@/components/ConfluenceStrip";
 import RangeCone from "@/components/RangeCone";
 import TimeMachine from "@/components/TimeMachine";
@@ -1960,6 +1961,7 @@ export default function DashboardPage() {
         onSelectStock={handleStockChange}
       />
 
+      <StockPicker />
       <DailyScan />
       <PatternAlerts />
       <MyCalls />

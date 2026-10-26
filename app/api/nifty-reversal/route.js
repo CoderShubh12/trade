@@ -2,6 +2,7 @@
 // Heads-up only: replay of the older tick-based bot found no continuation after reversal alerts.
 import { NextResponse } from "next/server";
 import { getYahooCandles } from "@/lib/yahooCandles";
+import { getAngelNifty5m } from "@/lib/angelNifty";
 import { niftyReversals } from "@/lib/niftyReversal";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +28,12 @@ async function news() {
 
 export async function GET() {
   try {
-    const all = await getYahooCandles("99926000", "5");
+    let all, source = "ANGEL", warn = null;
+    try { all = await getAngelNifty5m(); } catch (e) { warn = String(e.message || e); source = "YAHOO"; all = await getYahooCandles("99926000", "5"); }
     const ev = niftyReversals(all);
     const today = all[all.length - 1].date;
     const bars = all.filter((b) => b.date === today);
     const items = await news();
-    return NextResponse.json({ success: true, dataAt: new Date().toISOString(), date: today, bars, events: ev.filter((e) => e.key.startsWith(today)), news: items, note: "Heads-up only. Replay of the older reversal bot showed no continuation in the alert direction. News flags are keyword matches, not sentiment." });
+    return NextResponse.json({ success: true, dataAt: new Date().toISOString(), source, warn, lastBar: bars[bars.length - 1]?.clock, date: today, bars, events: ev.filter((e) => e.key.startsWith(today)), news: items, note: "Heads-up only. Replay of the older reversal bot showed no continuation in the alert direction. News flags are keyword matches, not sentiment." });
   } catch (e) { return NextResponse.json({ success: false, error: String(e.message || e) }, { status: 502 }); }
 }
